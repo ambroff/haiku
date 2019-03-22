@@ -66,6 +66,14 @@ public:
 	inline	void		StartQuantum();
 	inline	bool		HasQuantumEnded(bool wasPreempted, bool hasYielded);
 
+	inline  void        IncrementMigrationCount() const {
+		++fMigrationCount;
+	}
+	
+	inline int32        MigrationCount() const {
+		return fMigrationCount;
+	}
+	
 	inline	void		Continues();
 	inline	void		GoesAway();
 	inline	void		Dies();
@@ -129,6 +137,8 @@ private:
 			uint32		fLoadMeasurementEpoch;
 
 			CoreEntry*	fCore;
+
+	mutable int32       fMigrationCount;
 };
 
 class ThreadProcessing {

@@ -64,7 +64,8 @@ SchedulerListenerList gSchedulerListeners;
 spinlock gSchedulerListenersLock = B_SPINLOCK_INITIALIZER;
 
 static scheduler_mode_operations* sSchedulerModes[] = {
-	&gSchedulerLowLatencyMode,
+	&
+	gSchedulerLowLatencyMode,
 	&gSchedulerPowerSavingMode,
 };
 
@@ -159,6 +160,7 @@ scheduler_enqueue_in_run_queue(Thread *thread)
 	if (threadData->ShouldCancelPenalty())
 		threadData->CancelPenalty();
 
+	// here
 	enqueue(thread, true);
 }
 
@@ -523,6 +525,7 @@ scheduler_set_operation_mode(scheduler_mode mode)
 	}
 
 	dprintf("scheduler: switching to %s mode\n", sSchedulerModes[mode]->name);
+
 
 	InterruptsBigSchedulerLocker _;
 

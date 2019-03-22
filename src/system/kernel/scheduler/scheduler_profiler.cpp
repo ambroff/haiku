@@ -5,11 +5,17 @@
 
 #include "scheduler_profiler.h"
 
+#include "scheduler_thread.h"
+
 #include <debug.h>
 #include <util/AutoLock.h>
 
 #include <algorithm>
 
+#include "../TeamThreadTables.h"
+
+typedef BKernel::TeamThreadTable<Thread> ThreadHashTable;
+extern ThreadHashTable sThreadHash;
 
 #ifdef SCHEDULER_PROFILING
 
@@ -22,6 +28,27 @@ static Profiler* sProfiler;
 
 static int dump_profiler(int argc, char** argv);
 
+static int
+dump_thread_migration_stats(int argc, char **argv)
+{
+	int32 total = 0;
+	int32 count = 0;
+	
+	for (ThreadHashTable::Iterator it = sThreadHash.GetIterator();
+		 Thread* thread = it.Next();) {
+		total += thread->scheduler_data->MigrationCount();
+		++count;
+	}
+
+	uint32 avg = total / count;
+	uint32 remainder = total % count;
+
+	kprintf("Total threads: %d\n", count);
+	kprintf("Total thread migrations: %d\n", total);
+	kprintf("Average migration count: %d.%d\n", avg, remainder);
+
+	return 0;
+}
 
 Profiler::Profiler()
 	:
@@ -199,6 +226,9 @@ Profiler::Initialize()
 			" time-exclusive-per-call.\n"
 		"              (defaults to \"called\")\n"
 		"  <count>   - Maximum number of showed functions.\n", 0);
+
+	add_debugger_command_etc("migrations", &dump_thread_migration_stats, "Show stats about thread migrations",
+							 "Prints stats reguarding how threads are migrated between different CPUs\n", 0);
 }
 
 

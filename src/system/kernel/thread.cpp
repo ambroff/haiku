@@ -72,7 +72,7 @@ typedef BKernel::TeamThreadTable<Thread> ThreadHashTable;
 
 // thread list
 static Thread sIdleThreads[SMP_MAX_CPUS];
-static ThreadHashTable sThreadHash;
+ThreadHashTable sThreadHash;
 static rw_spinlock sThreadHashLock = B_RW_SPINLOCK_INITIALIZER;
 static thread_id sNextThreadID = 2;
 	// ID 1 is allocated for the kernel by Team::Team() behind our back
@@ -1865,7 +1865,6 @@ dump_thread_info(int argc, char **argv)
 
 	return 0;
 }
-
 
 static int
 dump_thread_list(int argc, char **argv)

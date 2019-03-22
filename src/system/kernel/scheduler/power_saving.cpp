@@ -132,7 +132,13 @@ rebalance(const ThreadData* threadData)
 
 			if (threadLoad > coreLoad / 3)
 				return core;
-			return coreLoad > kVeryHighLoad ? smallTaskCore : core;
+
+			if (coreLoad > kVeryHighLoad) {
+				threadData->IncrementMigrationCount();
+				return smallTaskCore;
+			} else {
+				return core;
+			}
 		}
 
 		if (threadLoad >= coreLoad / 2)
@@ -147,7 +153,13 @@ rebalance(const ThreadData* threadData)
 
 		int32 coreNewLoad = coreLoad - threadLoad;
 		int32 otherNewLoad = other->GetLoad() + threadLoad;
-		return coreNewLoad - otherNewLoad >= kLoadDifference / 2 ? other : core;
+
+		if (coreNewLoad - otherNewLoad >= kLoadDifference / 2) {
+			threadData->IncrementMigrationCount();
+			return other;
+		} else {
+			return core;
+		}
 	}
 
 	if (coreLoad >= kMediumLoad)
@@ -156,8 +168,13 @@ rebalance(const ThreadData* threadData)
 	CoreEntry* smallTaskCore = choose_small_task_core();
 	if (smallTaskCore == NULL)
 		return core;
-	return smallTaskCore->GetLoad() + threadLoad < kHighLoad
-		? smallTaskCore : core;
+
+	if (smallTaskCore->GetLoad() + threadLoad < kHighLoad) {
+		threadData->IncrementMigrationCount();
+		return smallTaskCore;
+	} else {
+		return core;
+	}
 }
 
 

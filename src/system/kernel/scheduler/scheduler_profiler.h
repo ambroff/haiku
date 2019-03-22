@@ -9,7 +9,7 @@
 #include <smp.h>
 
 
-//#define SCHEDULER_PROFILING
+#define SCHEDULER_PROFILING
 #ifdef SCHEDULER_PROFILING
 
 

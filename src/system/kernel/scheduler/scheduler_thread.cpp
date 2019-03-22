@@ -84,7 +84,8 @@ ThreadData::_ChooseCPU(CoreEntry* core, bool& rescheduleNeeded) const
 
 ThreadData::ThreadData(Thread* thread)
 	:
-	fThread(thread)
+	fThread(thread),
+	fMigrationCount(0)
 {
 }
 

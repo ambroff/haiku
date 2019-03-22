@@ -101,7 +101,13 @@ rebalance(const ThreadData* threadData)
 	ASSERT(difference > 0);
 
 	int32 threadLoad = threadData->GetLoad() / core->CPUCount();
-	return difference >= threadLoad ? other : core;
+
+	if (difference >= threadLoad) {
+		threadData->IncrementMigrationCount();
+		return other;
+	} else {
+		return core;
+	}
 }
 
 
