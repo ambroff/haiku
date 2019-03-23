@@ -92,6 +92,26 @@ scheduler_dump_thread_data(Thread* thread)
 	thread->scheduler_data->Dump();
 }
 
+static void
+do_smp_send_ici(int32 targetCPU, int32 message, addr_t data, addr_t data2, addr_t data3,
+				void *data_ptr, uint32 flags)
+{
+	SCHEDULER_ENTER_FUNCTION();
+	smp_send_ici(targetCPU, message, data, data2, data3, data_ptr, flags);
+}
+
+static void do_notify_scheduler_listeners(Thread *thread)
+{
+	SCHEDULER_ENTER_FUNCTION();
+	NotifySchedulerListeners(&SchedulerListener::ThreadEnqueuedInRunQueue,
+							 thread);
+}
+
+static int32 do_get_heap_priority(CPUEntry *targetCPU)
+{
+	SCHEDULER_ENTER_FUNCTION();
+	return CPUPriorityHeap::GetKey(targetCPU);
+}
 
 static void
 enqueue(Thread* thread, bool newOne)
@@ -124,17 +144,16 @@ enqueue(Thread* thread, bool newOne)
 	threadData->Enqueue();
 
 	// notify listeners
-	NotifySchedulerListeners(&SchedulerListener::ThreadEnqueuedInRunQueue,
-		thread);
+	do_notify_scheduler_listeners(thread);
 
-	int32 heapPriority = CPUPriorityHeap::GetKey(targetCPU);
+	int32 heapPriority = do_get_heap_priority(targetCPU);
 	if (threadPriority > heapPriority
 		|| (threadPriority == heapPriority && rescheduleNeeded)) {
 
 		if (targetCPU->ID() == smp_get_current_cpu())
 			gCPU[targetCPU->ID()].invoke_scheduler = true;
 		else {
-			smp_send_ici(targetCPU->ID(), SMP_MSG_RESCHEDULE, 0, 0, 0,
+			do_smp_send_ici(targetCPU->ID(), SMP_MSG_RESCHEDULE, 0, 0, 0,
 				NULL, SMP_MSG_FLAG_ASYNC);
 		}
 	}

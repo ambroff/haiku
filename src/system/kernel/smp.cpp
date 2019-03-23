@@ -1072,6 +1072,7 @@ void
 smp_send_ici(int32 targetCPU, int32 message, addr_t data, addr_t data2,
 	addr_t data3, void* dataPointer, uint32 flags)
 {
+	// KWA: Investigate here
 	struct smp_msg *msg;
 
 	TRACE("smp_send_ici: target 0x%lx, mess 0x%lx, data 0x%lx, data2 0x%lx, "
