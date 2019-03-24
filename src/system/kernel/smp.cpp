@@ -11,6 +11,7 @@
 
 /*! Functionality for symetrical multi-processors */
 
+#include <OS.h>
 
 #include <smp.h>
 
@@ -1131,6 +1132,78 @@ smp_send_ici(int32 targetCPU, int32 message, addr_t data, addr_t data2,
 	}
 }
 
+void
+smp_send_ici_kwa(int32 targetCPU, int32 message, addr_t data, addr_t data2,
+				 addr_t data3, void* dataPointer, uint32 flags,
+				 uint32& cas_attempts, nanotime_t& send_ici_latency, nanotime_t& process_pending_latency)
+{
+	// KWA: Investigate here
+	struct smp_msg *msg;
+
+	TRACE("smp_send_ici: target 0x%lx, mess 0x%lx, data 0x%lx, data2 0x%lx, "
+		"data3 0x%lx, ptr %p, flags 0x%lx\n", targetCPU, message, data, data2,
+		data3, dataPointer, flags);
+
+	if (sICIEnabled) {
+		int state;
+		int currentCPU;
+
+		// find_free_message leaves interrupts disabled
+		state = find_free_message(&msg);
+
+		currentCPU = smp_get_current_cpu();
+		if (targetCPU == currentCPU) {
+			return_free_message(msg);
+			restore_interrupts(state);
+			return; // nope, cant do that
+		}
+
+		// set up the message
+		msg->message = message;
+		msg->data = data;
+		msg->data2 = data2;
+		msg->data3 = data3;
+		msg->data_ptr = dataPointer;
+		msg->ref_count = 1;
+		msg->flags = flags;
+		msg->done = 0;
+
+		// stick it in the appropriate cpu's mailbox
+		struct smp_msg* next;
+		do {
+			++cas_attempts;
+			cpu_pause();
+			next = atomic_pointer_get(&sCPUMessages[targetCPU]);
+			msg->next = next;
+		} while (atomic_pointer_test_and_set(&sCPUMessages[targetCPU], msg,
+				next) != next);
+
+		{
+			nanotime_t start_time = system_time_nsecs();
+			arch_smp_send_ici(targetCPU);
+			send_ici_latency = system_time_nsecs() - start_time;
+		}
+
+		if ((flags & SMP_MSG_FLAG_SYNC) != 0) {
+			nanotime_t start_time = system_time_nsecs();
+			
+			// wait for the other cpu to finish processing it
+			// the interrupt handler will ref count it to <0
+			// if the message is sync after it has removed it from the mailbox
+			while (msg->done == 0) {
+				process_all_pending_ici(currentCPU);
+				cpu_wait(&msg->done, 1);
+			}
+			// for SYNC messages, it's our responsibility to put it
+			// back into the free list
+			return_free_message(msg);
+
+			process_pending_latency = system_time_nsecs() - start_time;
+		}
+
+		restore_interrupts(state);
+	}
+}
 
 void
 smp_send_multicast_ici(CPUSet& cpuMask, int32 message, addr_t data,

@@ -12,7 +12,7 @@
 
 
 /*! The thread scheduler */
-
+#include <cmath>
 
 #include <OS.h>
 
@@ -92,12 +92,63 @@ scheduler_dump_thread_data(Thread* thread)
 	thread->scheduler_data->Dump();
 }
 
+static const size_t RECORD_LENGTH = 4096;
+static uint32 gCASAttempts[RECORD_LENGTH];
+static nanotime_t gSendICILatency[RECORD_LENGTH];
+static nanotime_t gProcessPendingLatency[RECORD_LENGTH];
+
+static int64 gIndex = -1;
+
+static int ici_stats(int argc, char **argv) {
+	int64 total_recordings = gIndex % RECORD_LENGTH;
+
+	uint32 total_cas_attempts = 0;
+	uint32 max_cas_attempts = 0;
+
+	nanotime_t total_send_ici_latency = 0;
+	nanotime_t max_send_ici_latency = 0;
+
+	nanotime_t total_process_pending_latency = 0;
+	nanotime_t max_process_pending_latency = 0;
+	
+	for (int64 i = 0; i < total_recordings; ++i) {
+		max_cas_attempts = std::max(max_cas_attempts, gCASAttempts[i]);
+		total_cas_attempts += gCASAttempts[i];
+
+		max_send_ici_latency = std::max(max_send_ici_latency, gSendICILatency[i]);
+		total_send_ici_latency += gSendICILatency[i];
+
+		max_process_pending_latency = std::max(max_process_pending_latency, gProcessPendingLatency[i]);
+		total_process_pending_latency += gProcessPendingLatency[i];
+	}
+	
+	kprintf("CAS attempts: avg=%ld, max=%d\n", total_cas_attempts / total_recordings, max_cas_attempts);
+	kprintf("Send ICI Latency: avg=%ldns, max=%ldns\n", total_send_ici_latency / total_recordings, max_send_ici_latency);
+	kprintf("Process pending latency: avg=%ldns, max=%ldns\n", total_process_pending_latency / total_recordings, max_process_pending_latency);
+
+	return 0;
+}
+
+void smp_send_ici_kwa(int32 targetCPU, int32 message, addr_t data, addr_t data2,
+					  addr_t data3, void* dataPointer, uint32 flags,
+					  uint32& cas_attempts, nanotime_t& send_ici_latency, nanotime_t& process_pending_latency);
+
 static void
 do_smp_send_ici(int32 targetCPU, int32 message, addr_t data, addr_t data2, addr_t data3,
 				void *data_ptr, uint32 flags)
 {
 	SCHEDULER_ENTER_FUNCTION();
-	smp_send_ici(targetCPU, message, data, data2, data3, data_ptr, flags);
+
+	uint32 cas_attempts = 0;
+	nanotime_t send_ici_latency = 0;
+	nanotime_t process_pending_latency = 0;
+	
+	smp_send_ici_kwa(targetCPU, message, data, data2, data3, data_ptr, flags, cas_attempts, send_ici_latency, process_pending_latency);
+
+	int64 idx = atomic_add64(&gIndex, 1) % RECORD_LENGTH;
+	gCASAttempts[idx] = cas_attempts;
+	gSendICILatency[idx] = send_ici_latency;
+	gProcessPendingLatency[idx] = process_pending_latency;
 }
 
 static void do_notify_scheduler_listeners(Thread *thread)
@@ -732,6 +783,8 @@ scheduler_init()
 	dprintf("scheduler_init: found %" B_PRId32 " logical cpu%s and %" B_PRId32
 		" cache level%s\n", cpuCount, cpuCount != 1 ? "s" : "",
 		gCPUCacheLevelCount, gCPUCacheLevelCount != 1 ? "s" : "");
+
+	add_debugger_command_etc("icistats", &ici_stats, "Show ICI latency stats", "No arguments required", 0);
 
 #ifdef SCHEDULER_PROFILING
 	Profiling::Profiler::Initialize();
