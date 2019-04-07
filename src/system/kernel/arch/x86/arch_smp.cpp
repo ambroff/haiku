@@ -210,6 +210,11 @@ static uint32 gPauses[RECORD_LENGTH];
 static nanotime_t gWaitTime[RECORD_LENGTH];
 static nanotime_t gSetInterruptCommandTime[RECORD_LENGTH];
 
+static nanotime_t gRead1Time[RECORD_LENGTH];
+static nanotime_t gRead2Time[RECORD_LENGTH];
+static nanotime_t gWrite1Time[RECORD_LENGTH];
+static nanotime_t gWrite2Time[RECORD_LENGTH];
+
 static int64 gIndex = -1;
 
 static int apic_stats(int argc, char **argv) {
@@ -224,6 +229,18 @@ static int apic_stats(int argc, char **argv) {
 	nanotime_t total_set_interrupt_cmd_time = 0;
 	nanotime_t max_set_interrupt_cmd_time = 0;
 
+	nanotime_t total_read_1_time = 0;
+	nanotime_t max_read_1_time = 0;
+
+	nanotime_t total_read_2_time = 0;
+	nanotime_t max_read_2_time = 0;
+
+	nanotime_t total_write_1_time = 0;
+	nanotime_t max_write_1_time = 0;
+
+	nanotime_t total_write_2_time = 0;
+	nanotime_t max_write_2_time = 0;
+	
 	for (int64 i = 0; i < total_recordings; i++) {
 		max_waits = std::max(max_waits, gPauses[i]);
 		total_waits += gPauses[i];
@@ -233,14 +250,35 @@ static int apic_stats(int argc, char **argv) {
 
 		max_set_interrupt_cmd_time = std::max(max_set_interrupt_cmd_time, gSetInterruptCommandTime[i]);
 		total_set_interrupt_cmd_time += gSetInterruptCommandTime[i];
+
+		max_read_1_time = std::max(max_read_1_time, gRead1Time[i]);
+		total_read_1_time += gRead1Time[i];
+
+		max_read_2_time = std::max(max_read_2_time, gRead2Time[i]);
+		total_read_2_time += gRead2Time[i];
+
+		max_write_1_time = std::max(max_write_1_time, gWrite1Time[i]);
+		total_write_1_time += gWrite1Time[i];
+
+		max_write_2_time = std::max(max_write_2_time, gWrite2Time[i]);
+		total_write_2_time += gWrite2Time[i];
 	}
 
 	kprintf("APIC delivery waits: avg=%ld, max=%d\n", total_waits / total_recordings, max_waits);
 	kprintf("APIC delivery wait time: avg=%ldns, max=%ldns\n", total_wait_time / total_recordings, max_wait_time);
 	kprintf("APIC set command time: avg=%ldns, max=%ldns\n", total_set_interrupt_cmd_time / total_recordings, max_set_interrupt_cmd_time);
 
+	kprintf("APIC 1st read: avg=%ldns, max=%ldns\n", total_read_1_time / total_recordings, max_read_1_time);
+	kprintf("APIC 1st write: avg=%ldns, max=%ldns\n", total_write_1_time / total_recordings, max_write_1_time);
+	kprintf("APIC 2nd read: avg=%ldns, max=%ldns\n", total_read_2_time / total_recordings, max_read_2_time);
+	kprintf("APIC 2nd write: avg=%ldns, max=%ldns\n", total_write_2_time / total_recordings, max_write_2_time);
+
 	return 0;
 }
+
+void kwa_apic_set_interrupt_command(uint32 destination, uint32 mode,
+									nanotime_t& read_1_time, nanotime_t& write_1_time,
+									nanotime_t& read_2_time, nanotime_t& write_2_time);
 
 void
 arch_smp_send_ici(int32 target_cpu)
@@ -267,11 +305,20 @@ arch_smp_send_ici(int32 target_cpu)
 	nanotime_t wait_time = system_time_nsecs() - wait_start_time;
 
 	nanotime_t set_command_start_time = system_time_nsecs();
-	apic_set_interrupt_command(destination, mode);
+
+	nanotime_t read_1_time = 0;
+	nanotime_t read_2_time = 0;
+	nanotime_t write_1_time = 0;
+	nanotime_t write_2_time = 0;	
+	kwa_apic_set_interrupt_command(destination, mode, read_1_time, write_1_time, read_2_time, write_2_time);
 	nanotime_t set_command_time = system_time_nsecs() - set_command_start_time;
 
 	int64 idx = atomic_add64(&gIndex, 1) % RECORD_LENGTH;
 	gPauses[idx] = pause_count;
 	gWaitTime[idx] = wait_time;
 	gSetInterruptCommandTime[idx] = set_command_time;
+	gRead1Time[idx] = read_1_time;
+	gRead2Time[idx] = read_1_time;
+	gWrite1Time[idx] = write_1_time;
+	gWrite2Time[idx] = write_2_time;
 }

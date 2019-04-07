@@ -145,6 +145,42 @@ apic_set_spurious_intr_vector(uint32 config)
 		apic_write(APIC_SPURIOUS_INTR_VECTOR, config);
 }
 
+void
+kwa_apic_set_interrupt_command(uint32 destination, uint32 mode,
+							   nanotime_t& read_1_time, nanotime_t& write_1_time,
+							   nanotime_t& read_2_time, nanotime_t& write_2_time)
+{
+	if (sX2APIC) {
+		uint64 command = x86_read_msr(IA32_MSR_APIC_INTR_COMMAND);
+		command &= APIC_INTR_COMMAND_1_MASK;
+		command |= (uint64)destination << 32;
+		command |= mode;
+		x86_write_msr(IA32_MSR_APIC_INTR_COMMAND, command);
+	} else {
+		// This is where we're sending the APIC command
+		nanotime_t read_1_start_time = system_time_nsecs();
+		uint32 command2 = apic_read(APIC_INTR_COMMAND_2)
+			& APIC_INTR_COMMAND_2_MASK;
+		read_1_time = system_time_nsecs() - read_1_start_time;
+		command2 |= destination << 24;
+
+		nanotime_t write_1_start_time = system_time_nsecs();
+		apic_write(APIC_INTR_COMMAND_2, command2);
+		write_1_time = system_time_nsecs() - write_1_start_time;
+
+		nanotime_t read_2_start_time = system_time_nsecs();
+		uint32 command1 = apic_read(APIC_INTR_COMMAND_1)
+			& APIC_INTR_COMMAND_1_MASK;
+		read_2_time = system_time_nsecs() - read_2_start_time;
+		
+		command1 |= mode;
+
+		nanotime_t write_2_start_time = system_time_nsecs();
+		apic_write(APIC_INTR_COMMAND_1, command1);
+		write_2_time = system_time_nsecs() - write_2_start_time;
+	}
+}
+
 
 void
 apic_set_interrupt_command(uint32 destination, uint32 mode)
