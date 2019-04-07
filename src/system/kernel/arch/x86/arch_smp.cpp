@@ -225,7 +225,7 @@ static int apic_stats(int argc, char **argv) {
 	nanotime_t max_set_interrupt_cmd_time = 0;
 
 	for (int64 i = 0; i < total_recordings; i++) {
-		max_waits = std::max(max_waits, gPause[i]);
+		max_waits = std::max(max_waits, gPauses[i]);
 		total_waits += gPauses[i];
 
 		max_wait_time = std::max(max_wait_time, gWaitTime[i]);
@@ -235,9 +235,9 @@ static int apic_stats(int argc, char **argv) {
 		total_set_interrupt_cmd_time += gSetInterruptCommandTime[i];
 	}
 
-	kprintf("APIC delivery waits: avg=%d, max=%d\n", total_waits / total_recordings, max_waits);
-	kprintf("APIC delivery wait time: avg=%dns, max=%dns\n", total_wait_time / total_recordings, max_wait_time);
-	kprintf("APIC set command time: avg=%dns, max=%dns\n", total_set_interrupt_cmd_time / total_recordings, max_set_interrupt_cmd_time);
+	kprintf("APIC delivery waits: avg=%ld, max=%d\n", total_waits / total_recordings, max_waits);
+	kprintf("APIC delivery wait time: avg=%ldns, max=%ldns\n", total_wait_time / total_recordings, max_wait_time);
+	kprintf("APIC set command time: avg=%ldns, max=%ldns\n", total_set_interrupt_cmd_time / total_recordings, max_set_interrupt_cmd_time);
 }
 
 void
@@ -268,7 +268,7 @@ arch_smp_send_ici(int32 target_cpu)
 	apic_set_interrupt_command(destination, mode);
 	nanotime_t set_command_time = system_time_nsecs() - set_command_start_time;
 
-	int64 idx = atomic_add64(gIndex, 1) % RECORD_LENGTH;
+	int64 idx = atomic_add64(&gIndex, 1) % RECORD_LENGTH;
 	gPauses[idx] = pause_count;
 	gWaitTime[idx] = wait_time;
 	gSetInterruptCommandTime[idx] = set_command_time;
