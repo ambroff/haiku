@@ -137,6 +137,27 @@ Screen::SetBestMode(uint16 width, uint16 height, uint32 colorSpace,
 	if (count <= 0)
 		return B_ERROR;
 
+	debug_printf("Number of video modes detected: %d\n", count);
+
+	for (uint32 i = 0; i < count; ++i) {
+		const display_mode& mode = modes[i];
+		debug_printf("-- mode-%d: vw=%d, vh=%d, hs=%d, vs=%d, space=%d, flags=%d\n",
+					 i, mode.virtual_width, mode.virtual_height, mode.h_display_start, mode.v_display_start,
+					 mode.space, mode.flags);
+		debug_printf("-- mode-%d timing: pixel_clock=%d, h_display=%d, h_sync_start=%d, h_sync_end=%d, h_total=%d, v_display=%d, v_sync_start=%d, v_sync_end=%d, v_total=%d, flags=%d\n",
+					 i,
+					 mode.timing.pixel_clock,
+					 mode.timing.h_display,
+					 mode.timing.h_sync_start,
+					 mode.timing.h_sync_end,
+					 mode.timing.h_total,
+					 mode.timing.v_display,
+					 mode.timing.v_sync_start,
+					 mode.timing.v_sync_end,
+					 mode.timing.v_total,
+					 mode.timing.flags);
+	}
+
 	int32 index = _FindBestMode(modes, count, width, height, colorSpace,
 		frequency);
 	if (index < 0) {
@@ -182,11 +203,14 @@ Screen::SetBestMode(uint16 width, uint16 height, uint32 colorSpace,
 status_t
 Screen::SetPreferredMode()
 {
+	debug_printf("Screen::SetPreferredMode()\n");
+	
 	display_mode mode;
 	status_t status = fHWInterface->GetPreferredMode(&mode);
 	if (status != B_OK)
 		return status;
 
+	debug_printf("Preferred mode found. Setting mode.\n");
 	return SetMode(mode);
 }
 

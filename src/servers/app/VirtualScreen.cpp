@@ -126,10 +126,21 @@ VirtualScreen::AddScreen(Screen* screen, ScreenConfigurations& configurations)
 	}
 	if (status != B_OK) {
 		status_t status = screen->SetPreferredMode();
-		if (status != B_OK)
+		if (status != B_OK) {
+			debug_printf("Attempting 2560x1440\n");
+			status = screen->SetBestMode(2560, 1440, B_RGB32, 60.f);
+		}
+		
+		if (status != B_OK) {
+			debug_printf("Attempting 1024x768\n");
 			status = screen->SetBestMode(1024, 768, B_RGB32, 60.f);
-		if (status != B_OK)
-			status = screen->SetBestMode(800, 600, B_RGB32, 60.f, false);
+		}
+		
+		if (status != B_OK) {
+			debug_printf("Attempting 800x600\n");
+			status = screen->SetBestMode(800, 600, B_RGB32, 60.f, true);
+		}
+		
 		if (status != B_OK) {
 			debug_printf("app_server: Failed to set mode: %s\n",
 				strerror(status));
