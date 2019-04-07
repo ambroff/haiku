@@ -92,7 +92,7 @@ arch_smp_init(kernel_args *args)
 {
 	TRACE(("%s: entry\n", __func__));
 
-	add_debugger_command_etc("apicstats", &apic_stats, "Show APIC command stats", 0);
+	add_debugger_command_etc("apicstats", &apic_stats, "Show APIC command stats", "No arguments required", 0);
 
 	if (!apic_available()) {
 		// if we don't have an apic we can't do smp
@@ -238,6 +238,8 @@ static int apic_stats(int argc, char **argv) {
 	kprintf("APIC delivery waits: avg=%ld, max=%d\n", total_waits / total_recordings, max_waits);
 	kprintf("APIC delivery wait time: avg=%ldns, max=%ldns\n", total_wait_time / total_recordings, max_wait_time);
 	kprintf("APIC set command time: avg=%ldns, max=%ldns\n", total_set_interrupt_cmd_time / total_recordings, max_set_interrupt_cmd_time);
+
+	return 0;
 }
 
 void
