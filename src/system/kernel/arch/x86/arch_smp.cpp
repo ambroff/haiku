@@ -85,11 +85,14 @@ x86_get_cpu_apic_id(int32 cpu)
 	return sCPUAPICIds[cpu];
 }
 
+static int apic_stats(int argc, char **argv);
 
 status_t
 arch_smp_init(kernel_args *args)
 {
 	TRACE(("%s: entry\n", __func__));
+
+	add_debugger_command_etc("apicstats", &apic_stats, "Show APIC command stats", 0);
 
 	if (!apic_available()) {
 		// if we don't have an apic we can't do smp
@@ -202,6 +205,40 @@ arch_smp_send_broadcast_ici(void)
 	apic_set_interrupt_command(0, mode);
 }
 
+static const size_t RECORD_LENGTH = 4096;
+static uint32 gPauses[RECORD_LENGTH];
+static nanotime_t gWaitTime[RECORD_LENGTH];
+static nanotime_t gSetInterruptCommandTime[RECORD_LENGTH];
+
+static int64 gIndex = -1;
+
+static int apic_stats(int argc, char **argv) {
+	int64 total_recordings = gIndex % RECORD_LENGTH;
+
+	uint32 total_waits = 0;
+	uint32 max_waits = 0;
+
+	nanotime_t total_wait_time = 0;
+	nanotime_t max_wait_time = 0;
+
+	nanotime_t total_set_interrupt_cmd_time = 0;
+	nanotime_t max_set_interrupt_cmd_time = 0;
+
+	for (int64 i = 0; i < total_recordings; i++) {
+		max_waits = std::max(max_waits, gPause[i]);
+		total_waits += gPauses[i];
+
+		max_wait_time = std::max(max_wait_time, gWaitTime[i]);
+		total_wait_time += gWaitTime[i];
+
+		max_set_interrupt_cmd_time = std::max(max_set_interrupt_cmd_time, gSetInterruptCommandTime[i]);
+		total_set_interrupt_cmd_time += gSetInterruptCommandTime[i];
+	}
+
+	kprintf("APIC delivery waits: avg=%d, max=%d\n", total_waits / total_recordings, max_waits);
+	kprintf("APIC delivery wait time: avg=%dns, max=%dns\n", total_wait_time / total_recordings, max_wait_time);
+	kprintf("APIC set command time: avg=%dns, max=%dns\n", total_set_interrupt_cmd_time / total_recordings, max_set_interrupt_cmd_time);
+}
 
 void
 arch_smp_send_ici(int32 target_cpu)
@@ -219,8 +256,20 @@ arch_smp_send_ici(int32 target_cpu)
 			| APIC_INTR_COMMAND_1_DEST_MODE_PHYSICAL
 			| APIC_INTR_COMMAND_1_DEST_FIELD;
 
-	while (!apic_interrupt_delivered())
+	nanotime_t wait_start_time = system_time_nsecs();
+	uint32 pause_count = 0;
+	while (!apic_interrupt_delivered()) {
 		cpu_pause();
-	apic_set_interrupt_command(destination, mode);
-}
+		++pause_count;
+	}
+	nanotime_t wait_time = system_time_nsecs() - wait_start_time;
 
+	nanotime_t set_command_start_time = system_time_nsecs();
+	apic_set_interrupt_command(destination, mode);
+	nanotime_t set_command_time = system_time_nsecs() - set_command_start_time;
+
+	int64 idx = atomic_add64(gIndex, 1) % RECORD_LENGTH;
+	gPauses[idx] = pause_count;
+	gWaitTime[idx] = wait_time;
+	gSetInterruptCommandTime[idx] = set_command_time;
+}

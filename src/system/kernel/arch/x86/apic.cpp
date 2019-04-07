@@ -21,7 +21,7 @@
 
 
 static void *sLocalAPIC = NULL;
-static bool sX2APIC = false;
+bool sX2APIC = false;
 
 
 bool
@@ -156,6 +156,7 @@ apic_set_interrupt_command(uint32 destination, uint32 mode)
 		command |= mode;
 		x86_write_msr(IA32_MSR_APIC_INTR_COMMAND, command);
 	} else {
+		// This is where we're sending the APIC command
 		uint32 command2 = apic_read(APIC_INTR_COMMAND_2)
 				& APIC_INTR_COMMAND_2_MASK;
 		command2 |= destination << 24;

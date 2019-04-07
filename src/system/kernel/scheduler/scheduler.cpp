@@ -99,6 +99,8 @@ static nanotime_t gProcessPendingLatency[RECORD_LENGTH];
 
 static int64 gIndex = -1;
 
+extern bool sX2APIC;
+
 static int ici_stats(int argc, char **argv) {
 	int64 total_recordings = gIndex % RECORD_LENGTH;
 
@@ -125,6 +127,7 @@ static int ici_stats(int argc, char **argv) {
 	kprintf("CAS attempts: avg=%ld, max=%d\n", total_cas_attempts / total_recordings, max_cas_attempts);
 	kprintf("Send ICI Latency: avg=%ldns, max=%ldns\n", total_send_ici_latency / total_recordings, max_send_ici_latency);
 	kprintf("Process pending latency: avg=%ldns, max=%ldns\n", total_process_pending_latency / total_recordings, max_process_pending_latency);
+	kprintf("sX2APIC: %d\n", sX2APIC ? 1 : 0);
 
 	return 0;
 }
