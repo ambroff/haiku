@@ -15,7 +15,8 @@ static int io_stats(int argc, char **argv) {
 	auto iter = IOSchedulerRoster::Default()->SchedulerList().GetIterator();
 	while (iter.HasNext()) {
 		auto scheduler = iter.Next();
-		kprintf("Scheduler %p\n", scheduler);
+		kprintf("-- Scheduler %p --\n", scheduler);
+		scheduler->Dump();
 	}
 
 	return 0;
