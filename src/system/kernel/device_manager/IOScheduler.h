@@ -31,6 +31,21 @@ struct IORequestOwner : DoublyLinkedListLinkImpl<IORequestOwner> {
 			void				Dump() const;
 };
 
+struct IORequestOwnerHashDefinition {
+  typedef thread_id		KeyType;
+  typedef IORequestOwner	ValueType;
+
+  size_t HashKey(thread_id key) const;
+  size_t Hash(const IORequestOwner* value) const;
+  bool Compare(thread_id key, const IORequestOwner* value) const;
+  IORequestOwner*& GetLink(IORequestOwner* value) const;
+};
+
+struct IORequestOwnerHashTable
+    : BOpenHashTable<IORequestOwnerHashDefinition, false> {
+};
+
+struct IORequestOwnerHashTable;
 
 class IOScheduler : public DoublyLinkedListLinkImpl<IOScheduler> {
 public:
@@ -47,6 +62,8 @@ public:
 
 	virtual	void				SetDeviceCapacity(off_t deviceCapacity);
 	virtual void				MediaChanged();
+
+	virtual void				SubmitRequest(IORequest *request) = 0;
 
 	virtual	status_t			ScheduleRequest(IORequest* request) = 0;
 

@@ -28,7 +28,7 @@
 
 #include "dma_resources.h"
 #include "IORequest.h"
-#include "IOSchedulerSimple.h"
+#include "IOSchedulerNoop.h"
 
 
 //#define TRACE_SCSI_DISK
@@ -200,6 +200,7 @@ log2(uint32 x)
 static status_t
 do_io(void* cookie, IOOperation* operation)
 {
+	TRACE("SCSI: Performing operation: %p\n", operation);
 	das_driver_info* info = (das_driver_info*)cookie;
 
 	// TODO: this can go away as soon as we pushed the IOOperation to the upper
@@ -208,6 +209,7 @@ do_io(void* cookie, IOOperation* operation)
 	status_t status = sSCSIPeripheral->io(info->scsi_periph_device, operation,
 		&bytesTransferred);
 
+	TRACE("SCSI: Invoking operation completed callback for operation %p: status=%d, bytes_transfered=%ld\n", operation, status, bytesTransferred);
 	info->io_scheduler->OperationCompleted(operation, status, bytesTransferred);
 	return status;
 }
@@ -300,9 +302,7 @@ das_read(void* cookie, off_t pos, void* buffer, size_t* _length)
 	if (status != B_OK)
 		return status;
 
-	status = handle->info->io_scheduler->ScheduleRequest(&request);
-	if (status != B_OK)
-		return status;
+	handle->info->io_scheduler->SubmitRequest(&request);
 
 	status = request.Wait(0, 0);
 	if (status == B_OK)
@@ -325,9 +325,7 @@ das_write(void* cookie, off_t pos, const void* buffer, size_t* _length)
 	if (status != B_OK)
 		return status;
 
-	status = handle->info->io_scheduler->ScheduleRequest(&request);
-	if (status != B_OK)
-		return status;
+	handle->info->io_scheduler->SubmitRequest(&request);
 
 	status = request.Wait(0, 0);
 	if (status == B_OK)
@@ -446,6 +444,7 @@ das_ioctl(void* cookie, uint32 op, void* buffer, size_t length)
 static void
 das_set_capacity(das_driver_info* info, uint64 capacity, uint32 blockSize)
 {
+	//panic("Who is calling this?");
 	TRACE("das_set_capacity(device = %p, capacity = %" B_PRIu64
 		", blockSize = %" B_PRIu32 ")\n", info, capacity, blockSize);
 
@@ -470,7 +469,7 @@ das_set_capacity(das_driver_info* info, uint64 capacity, uint32 blockSize)
 		if (status != B_OK)
 			panic("initializing DMAResource failed: %s", strerror(status));
 
-		info->io_scheduler = new(std::nothrow) IOSchedulerSimple(
+		info->io_scheduler = new(std::nothrow) IOSchedulerNoop(
 			info->dma_resource);
 		if (info->io_scheduler == NULL)
 			panic("allocating IOScheduler failed.");

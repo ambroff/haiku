@@ -11,6 +11,25 @@
 
 #include "IOSchedulerRoster.h"
 
+size_t IORequestOwnerHashDefinition::HashKey(thread_id key) const {
+  return key;
+}
+
+size_t IORequestOwnerHashDefinition::Hash(const IORequestOwner *value) const {
+  return value->thread;
+}
+
+bool IORequestOwnerHashDefinition::Compare(
+    thread_id key,
+    const IORequestOwner *value) const
+{
+  return value->thread == key;
+}
+
+IORequestOwner*& IORequestOwnerHashDefinition::GetLink(IORequestOwner *value) const
+{
+  return value->hash_link;
+}
 
 IOScheduler::IOScheduler(DMAResource* resource)
 	:

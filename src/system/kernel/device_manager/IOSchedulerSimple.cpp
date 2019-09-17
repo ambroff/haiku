@@ -66,24 +66,6 @@ IORequestOwner::Dump() const
 
 // #pragma mark -
 
-
-struct IOSchedulerSimple::RequestOwnerHashDefinition {
-	typedef thread_id		KeyType;
-	typedef IORequestOwner	ValueType;
-
-	size_t HashKey(thread_id key) const				{ return key; }
-	size_t Hash(const IORequestOwner* value) const	{ return value->thread; }
-	bool Compare(thread_id key, const IORequestOwner* value) const
-		{ return value->thread == key; }
-	IORequestOwner*& GetLink(IORequestOwner* value) const
-		{ return value->hash_link; }
-};
-
-struct IOSchedulerSimple::RequestOwnerHashTable
-		: BOpenHashTable<RequestOwnerHashDefinition, false> {
-};
-
-
 IOSchedulerSimple::IOSchedulerSimple(DMAResource* resource)
 	:
 	IOScheduler(resource),
@@ -146,7 +128,7 @@ IOSchedulerSimple::Init(const char* name)
 	status_t error = IOScheduler::Init(name);
 	if (error != B_OK)
 		return error;
-
+	
 	size_t count = fDMAResource != NULL ? fDMAResource->BufferCount() : 16;
 	for (size_t i = 0; i < count; i++) {
 		IOOperation* operation = new(std::nothrow) IOOperation;
@@ -177,7 +159,7 @@ IOSchedulerSimple::Init(const char* name)
 		fUnusedRequestOwners.Add(&owner);
 	}
 
-	fRequestOwners = new(std::nothrow) RequestOwnerHashTable;
+	fRequestOwners = new(std::nothrow) IORequestOwnerHashTable;
 	if (fRequestOwners == NULL)
 		return B_NO_MEMORY;
 
@@ -317,6 +299,11 @@ IOSchedulerSimple::Dump() const
 		kprintf(" %p", owner);
 	}
 	kprintf("\n");
+
+	kprintf("  fIterationBandwidth: %ld\n", fIterationBandwidth);
+	kprintf("  fMinOwnerBandwidth: %ld\n", fMinOwnerBandwidth);
+	kprintf("  fMaxOwnerBandwidth: %ld\n", fMaxOwnerBandwidth);
+	kprintf("  fBlockSize: %ld\n", fBlockSize);
 }
 
 
@@ -699,7 +686,7 @@ panic("no more requests for owner %p (thread %" B_PRId32 ")", owner, owner->thre
 #endif
 		while (IOOperation* operation = operations.RemoveHead()) {
 			TRACE("IOSchedulerSimple::_Scheduler(): calling callback for "
-				"operation %ld: %p\n", i++, operation);
+				"operation %d: %p\n", i++, operation);
 
 			IOSchedulerRoster::Default()->Notify(IO_SCHEDULER_OPERATION_STARTED,
 				this, operation->Parent(), operation);

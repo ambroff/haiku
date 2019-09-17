@@ -881,6 +881,8 @@ IORequest::FinishedCallback(void** _cookie) const
 status_t
 IORequest::Wait(uint32 flags, bigtime_t timeout)
 {
+  TRACE("%p->IORequest::Wait(%d, %ld)\n", this, flags, timeout);
+
 	MutexLocker locker(fLock);
 
 	if (IsFinished() && fIsNotified)

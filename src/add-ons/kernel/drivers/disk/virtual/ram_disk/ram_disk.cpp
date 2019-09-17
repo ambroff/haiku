@@ -31,7 +31,7 @@
 
 #include "dma_resources.h"
 #include "io_requests.h"
-#include "IOSchedulerSimple.h"
+#include "IOSchedulerNoop.h"
 
 
 //#define TRACE_RAM_DISK
@@ -349,7 +349,7 @@ struct RawDevice : Device, DoublyLinkedListLinkImpl<RawDevice> {
 			return error;
 		}
 
-		fIOScheduler = new(std::nothrow) IOSchedulerSimple(fDMAResource);
+		fIOScheduler = new(std::nothrow) IOSchedulerNoop(fDMAResource);
 		if (fIOScheduler == NULL) {
 			Unprepare();
 			return B_NO_MEMORY;
@@ -581,7 +581,10 @@ struct RawDevice : Device, DoublyLinkedListLinkImpl<RawDevice> {
 		return B_OK;
 	}
 
-
+	void DoSyncIO(IORequest* request)
+	{
+		fIOScheduler->SubmitRequest(request);
+	}
 
 	status_t DoIO(IORequest* request)
 	{
@@ -1332,9 +1335,7 @@ ram_disk_raw_device_read(void* _cookie, off_t pos, void* buffer,
 	if (status != B_OK)
 		return status;
 
-	status = device->DoIO(&request);
-	if (status != B_OK)
-		return status;
+	device->DoSyncIO(&request);
 
 	status = request.Wait(0, 0);
 	if (status == B_OK)
@@ -1362,9 +1363,7 @@ ram_disk_raw_device_write(void* _cookie, off_t pos, const void* buffer,
 	if (status != B_OK)
 		return status;
 
-	status = device->DoIO(&request);
-	if (status != B_OK)
-		return status;
+	device->DoSyncIO(&request);
 
 	status = request.Wait(0, 0);
 	if (status == B_OK)

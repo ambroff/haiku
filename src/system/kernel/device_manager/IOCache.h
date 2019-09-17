@@ -30,6 +30,8 @@ public:
 
 	virtual	status_t			ScheduleRequest(IORequest* request);
 
+	virtual void				SubmitRequest(IORequest *request);
+
 	virtual	void				AbortRequest(IORequest* request,
 									status_t status = B_CANCELED);
 	virtual	void				OperationCompleted(IOOperation* operation,

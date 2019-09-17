@@ -7,15 +7,27 @@
 #include "IOSchedulerRoster.h"
 
 #include <util/AutoLock.h>
-
+#include <kernel/debug.h>
 
 /*static*/ IOSchedulerRoster IOSchedulerRoster::sDefaultInstance;
 
+static int io_stats(int argc, char **argv) {
+	auto iter = IOSchedulerRoster::Default()->SchedulerList().GetIterator();
+	while (iter.HasNext()) {
+		auto scheduler = iter.Next();
+		kprintf("-- Scheduler %p --\n", scheduler);
+		scheduler->Dump();
+	}
+
+	return 0;
+}
 
 /*static*/ void
 IOSchedulerRoster::Init()
 {
 	new(&sDefaultInstance) IOSchedulerRoster;
+
+	add_debugger_command_etc("iostats", &io_stats, "Show I/O scheduler stats", "No arguments required", 0);
 }
 
 

@@ -40,8 +40,6 @@ public:
 private:
 			typedef DoublyLinkedList<IORequestOwner> RequestOwnerList;
 
-			struct RequestOwnerHashDefinition;
-			struct RequestOwnerHashTable;
 
 			void				_Finisher();
 			bool				_FinisherWorkPending();
@@ -84,7 +82,7 @@ private:
 			int32				fAllocatedRequestOwnerCount;
 			RequestOwnerList	fActiveRequestOwners;
 			RequestOwnerList	fUnusedRequestOwners;
-			RequestOwnerHashTable* fRequestOwners;
+			IORequestOwnerHashTable* fRequestOwners;
 			generic_size_t		fBlockSize;
 			int32				fPendingOperations;
 			off_t				fIterationBandwidth;
