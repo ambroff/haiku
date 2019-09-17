@@ -317,6 +317,11 @@ IOSchedulerSimple::Dump() const
 		kprintf(" %p", owner);
 	}
 	kprintf("\n");
+
+	kprintf("  fIterationBandwidth: %ld\n", fIterationBandwidth);
+	kprintf("  fMinOwnerBandwidth: %ld\n", fMinOwnerBandwidth);
+	kprintf("  fMaxOwnerBandwidth: %ld\n", fMaxOwnerBandwidth);
+	kprintf("  fBlockSize: %ld\n", fBlockSize);
 }
 
 
@@ -699,7 +704,7 @@ panic("no more requests for owner %p (thread %" B_PRId32 ")", owner, owner->thre
 #endif
 		while (IOOperation* operation = operations.RemoveHead()) {
 			TRACE("IOSchedulerSimple::_Scheduler(): calling callback for "
-				"operation %ld: %p\n", i++, operation);
+				"operation %d: %p\n", i++, operation);
 
 			IOSchedulerRoster::Default()->Notify(IO_SCHEDULER_OPERATION_STARTED,
 				this, operation->Parent(), operation);
