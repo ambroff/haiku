@@ -25,8 +25,11 @@ private:
 
   mutex fLock;
   ConditionVariable fNewRetryCondition;
-  IOOperationList fOperationsToRetry;
+  IORequestList fRequestsToRetry;
   thread_id fRetryThread;
+
+  IOOperationList fOperationPool;
+
   volatile bool	fTerminating;
 };
 

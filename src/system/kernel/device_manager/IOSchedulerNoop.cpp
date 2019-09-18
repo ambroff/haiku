@@ -32,6 +32,10 @@ IOSchedulerNoop::~IOSchedulerNoop() {
     wait_for_thread(fRetryThread, NULL);
   }
 
+  while (IOOperation *operation = fOperationPool.RemoveHead()) {
+    delete operation;
+  }
+
   mutex_lock(&fLock);
   mutex_destroy(&fLock);
 }
@@ -42,7 +46,17 @@ status_t IOSchedulerNoop::Init(const char *name) {
     return error;
   }
 
-  TRACE("Initializing IOSchedulerNoop(%p) %s buffer_count=%d\n", this, name, fDMAResource == NULL ? -1 : fDMAResource->BufferCount());
+  size_t buffer_count = fDMAResource == NULL ? -1 : fDMAResource->BufferCount();
+  TRACE("Initializing IOSchedulerNoop(%p) %s buffer_count=%ld\n", this, name, buffer_count);
+
+  for (size_t i = 0; i < buffer_count; ++i) {
+    IOOperation *operation = new(std::nothrow) IOOperation;
+    if (operation == NULL) {
+      return B_NO_MEMORY;
+    }
+
+    fOperationPool.Add(operation);
+  }
 
   {
     char buffer[B_OS_NAME_LENGTH];
@@ -65,12 +79,7 @@ status_t IOSchedulerNoop::ScheduleRequest(IORequest *request)
 {
   TRACE("%p->IOSchedulerNoop::ScheduleRequest(%p) size=%ld\n", this, request, request->Length());
 
-  IOOperation *operation = new(nothrow) IOOperation;
-  if (operation == NULL) {
-    TRACE("Failed to allocate IOOperation\n");
-    request->SetStatusAndNotify(B_NO_MEMORY);
-    return B_NO_MEMORY;
-  }
+  MutexLocker locker(&fLock);
 
   {
     IOBuffer *buf = request->Buffer();
@@ -83,6 +92,14 @@ status_t IOSchedulerNoop::ScheduleRequest(IORequest *request)
     }
   }
 
+  IOOperation *operation = fOperationPool.RemoveHead();
+  if (operation == NULL) {
+    TRACE("Failed to allocate IOOperation because the device is busy. Enqueuing for later\n");
+    fRequestsToRetry.Add(request);
+    fNewRetryCondition.NotifyAll();
+    return B_OK;
+  }
+
   TRACE("%p->IOSchedulerNoop: Scheduled request %p\n", this, request);
   IOSchedulerRoster::Default()->Notify(IO_SCHEDULER_REQUEST_SCHEDULED, this,
                                        request);
@@ -90,15 +107,16 @@ status_t IOSchedulerNoop::ScheduleRequest(IORequest *request)
   if (fDMAResource != NULL) {
     status_t status = fDMAResource->TranslateNext(request, operation, request->Length());
     if (status != B_OK) {
+      operation->SetParent(NULL);
+      fOperationPool.Add(operation);
+
       if (status == B_BUSY) {
         TRACE("%p->IOSchedulerNoop: Resource is busy try %p again later\n", this, request);
-        MutexLocker locker(&fLock);
-        fOperationsToRetry.Add(operation);
+        fRequestsToRetry.Add(request);
         return B_OK;
       }
 
       TRACE("%p->IOSchedulerNoop: Failed to translate dma request %p, aborting\n", this, request);
-      delete operation;
       AbortRequest(request, status);
       return status;
     }
@@ -107,8 +125,9 @@ status_t IOSchedulerNoop::ScheduleRequest(IORequest *request)
     if (status != B_OK) {
       // FIXME:
       TRACE("%p->IOSchedulerNoop: Failed to prepare request %p, aborting\n", this, request);
-      delete operation;
       AbortRequest(request, status);
+      operation->SetParent(NULL);
+      fOperationPool.Add(operation);
       return status;
     }
 
@@ -163,7 +182,10 @@ void IOSchedulerNoop::OperationCompleted(IOOperation *operation,
       IO_SCHEDULER_REQUEST_FINISHED, this, request);
   request->NotifyFinished();
 
-  delete operation;
+  operation->SetParent(NULL);
+
+  MutexLocker locker(&fLock);
+  fOperationPool.Add(operation);
 }
 
 void IOSchedulerNoop::Dump() const {
@@ -179,8 +201,8 @@ status_t IOSchedulerNoop::_RetryLoop() {
   while (!fTerminating) {
     MutexLocker locker(fLock);
 
-    IOOperation *operation = fOperationsToRetry.RemoveHead();
-    if (operation == NULL) {
+    IORequest *request = fRequestsToRetry.RemoveHead();
+    if (request == NULL) {
       ConditionVariableEntry entry;
       fNewRetryCondition.Add(&entry);
 
@@ -189,18 +211,28 @@ status_t IOSchedulerNoop::_RetryLoop() {
       continue;
     }
 
-    status_t status = fDMAResource->TranslateNext(operation->Parent(), operation, operation->Parent()->Length());
-    if (status != B_OK) {
-      if (status == B_BUSY) {
-        TRACE("%p->IOSchedulerNoop: Resource is busy try %p again later\n", this, operation->Parent());
-        fOperationsToRetry.Add(operation);
-        continue;
-      }
+    IOOperation *operation = fOperationPool.RemoveHead();
 
-      TRACE("%p->IOSchedulerNoop: Failed to translate dma request %p, aborting\n", this, operation->Parent());
-      AbortRequest(operation->Parent(), status);
-      delete operation;
-      return status;
+    if (fDMAResource != NULL) {
+      status_t status = fDMAResource->TranslateNext(
+          operation->Parent(), operation, operation->Parent()->Length());
+      if (status != B_OK) {
+        if (status == B_BUSY) {
+          TRACE("%p->IOSchedulerNoop: Resource is busy try %p again later\n",
+                this, operation->Parent());
+          fRequestsToRetry.Add(request);
+          continue;
+        }
+
+        TRACE("%p->IOSchedulerNoop: Failed to translate dma request %p, aborting\n",
+              this, operation->Parent());
+        AbortRequest(operation->Parent(), status);
+        operation->SetParent(NULL);
+        fOperationPool.Add(operation);
+        return status;
+      }
+    } else {
+
     }
   }
 
