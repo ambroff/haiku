@@ -6,6 +6,7 @@
 class IOSchedulerNoop : public IOScheduler {
 public:
   explicit IOSchedulerNoop(DMAResource* resource);
+  virtual ~IOSchedulerNoop();
 
   status_t Init(const char *name) override;
 
@@ -17,6 +18,16 @@ public:
                           generic_size_t transferredBytes) override;
 
   void Dump() const override;
+
+private:
+  static status_t _RetryThread(void *self);
+  status_t _RetryLoop();
+
+  mutex fLock;
+  ConditionVariable fNewRetryCondition;
+  IOOperationList fOperationsToRetry;
+  thread_id fRetryThread;
+  volatile bool	fTerminating;
 };
 
 #endif  // IO_SCHEDULER_NOOP_H
