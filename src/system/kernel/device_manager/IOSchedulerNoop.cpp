@@ -177,14 +177,14 @@ void IOSchedulerNoop::OperationCompleted(IOOperation *operation,
     fDMAResource->RecycleBuffer(operation->Buffer());
   }
 
-  TRACE("%p->IOSchedulerNoop: Request completed %p\n", this, operation->Parent());
+  TRACE("%p->IOSchedulerNoop: Request completed %p\n", this, request);
   IOSchedulerRoster::Default()->Notify(
       IO_SCHEDULER_REQUEST_FINISHED, this, request);
   request->NotifyFinished();
 
   operation->SetParent(NULL);
 
-  MutexLocker locker(&fLock);
+  //MutexLocker locker(&fLock);
   fOperationPool.Add(operation);
 }
 
