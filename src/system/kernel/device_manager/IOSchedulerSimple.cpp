@@ -66,24 +66,6 @@ IORequestOwner::Dump() const
 
 // #pragma mark -
 
-
-struct IOSchedulerSimple::RequestOwnerHashDefinition {
-	typedef thread_id		KeyType;
-	typedef IORequestOwner	ValueType;
-
-	size_t HashKey(thread_id key) const				{ return key; }
-	size_t Hash(const IORequestOwner* value) const	{ return value->thread; }
-	bool Compare(thread_id key, const IORequestOwner* value) const
-		{ return value->thread == key; }
-	IORequestOwner*& GetLink(IORequestOwner* value) const
-		{ return value->hash_link; }
-};
-
-struct IOSchedulerSimple::RequestOwnerHashTable
-		: BOpenHashTable<RequestOwnerHashDefinition, false> {
-};
-
-
 IOSchedulerSimple::IOSchedulerSimple(DMAResource* resource)
 	:
 	IOScheduler(resource),
@@ -177,7 +159,7 @@ IOSchedulerSimple::Init(const char* name)
 		fUnusedRequestOwners.Add(&owner);
 	}
 
-	fRequestOwners = new(std::nothrow) RequestOwnerHashTable;
+	fRequestOwners = new(std::nothrow) IORequestOwnerHashTable;
 	if (fRequestOwners == NULL)
 		return B_NO_MEMORY;
 

@@ -7,11 +7,19 @@ class IOSchedulerNoop : public IOScheduler {
 public:
   explicit IOSchedulerNoop(DMAResource* resource);
 
+  status_t Init(const char *name) override;
+
   status_t ScheduleRequest(IORequest *request) override;
+
   void AbortRequest(IORequest *request, status_t status) override;
+
   void OperationCompleted(IOOperation *operation, status_t status,
                           generic_size_t transferredBytes) override;
+
   void Dump() const override;
+
+private:
+  //IORequestOwnerHashTable* fRequestOwners;
 };
 
 #endif  // IO_SCHEDULER_NOOP_H
