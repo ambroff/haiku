@@ -17,9 +17,6 @@ public:
                           generic_size_t transferredBytes) override;
 
   void Dump() const override;
-
-private:
-  //IORequestOwnerHashTable* fRequestOwners;
 };
 
 #endif  // IO_SCHEDULER_NOOP_H

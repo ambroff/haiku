@@ -812,3 +812,32 @@ IOSchedulerSimple::_GetRequestOwner(team_id team, thread_id thread,
 	fUnusedRequestOwners.MoveFrom(&existingOwners);
 	return owner;
 }
+
+// From IOSchedulerNoop::ScheduleRequest()
+//  {
+//    auto team_id = request->TeamID();
+//    auto thread_id = request->ThreadID();
+//    IORequestOwner *owner = fRequestOwners->Lookup(thread_id);
+//    if (owner == NULL) {
+//      owner = new(nothrow) IORequestOwner;
+//      if (owner == NULL) {
+//        panic("IOSchedulerNoop: Out of request owners!\n");
+//        request->SetStatusAndNotify(B_NO_MEMORY);
+//        return B_NO_MEMORY;
+//      }
+//
+//      owner->team = team_id;
+//      owner->thread = thread_id;
+//      fRequestOwners->InsertUnchecked(owner);
+//
+//      int32 priority = thread_get_io_priority(request->ThreadID());
+//      if (priority >= 0) {
+//        owner->priority = priority;
+//      } else {
+//        owner->priority = B_IDLE_PRIORITY;
+//      }
+//    }
+//
+//    request->SetOwner(owner);
+//    owner->requests.Add(request);
+//  }

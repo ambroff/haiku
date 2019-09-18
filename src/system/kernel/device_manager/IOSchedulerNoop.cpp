@@ -2,80 +2,77 @@
 
 #include "IOSchedulerRoster.h"
 
+#define TRACE_IO_SCHEDULER
+#ifdef TRACE_IO_SCHEDULER
+#	define TRACE(x...) dprintf(x)
+#else
+#	define TRACE(x...) ;
+#endif
+
 IOSchedulerNoop::IOSchedulerNoop(DMAResource *resource)
     : IOScheduler(resource)
-      //fRequestOwners(NULL)
 {
 }
 
 status_t IOSchedulerNoop::Init(const char *name) {
+  TRACE("Initializing IOSchedulerNoop(%p) %s\n", this, name);
+
   status_t error = IOScheduler::Init(name);
   if (error != B_OK) {
     return error;
   }
-
-//  fRequestOwners = new(std::nothrow) IORequestOwnerHashTable;
-//  if (fRequestOwners == NULL)
-//    return B_NO_MEMORY;
 
   return B_OK;
 }
 
 status_t IOSchedulerNoop::ScheduleRequest(IORequest *request)
 {
+  TRACE("%p->IOSchedulerNoop::ScheduleRequest(%p) size=%ld\n", this, request, request->Length());
+
   IOOperation *operation = new(nothrow) IOOperation;
   if (operation == NULL) {
+    TRACE("Failed to allocate IOOperation\n");
     request->SetStatusAndNotify(B_NO_MEMORY);
     return B_NO_MEMORY;
   }
 
-//  {
-//    auto team_id = request->TeamID();
-//    auto thread_id = request->ThreadID();
-//    IORequestOwner *owner = fRequestOwners->Lookup(thread_id);
-//    if (owner == NULL) {
-//      owner = new(nothrow) IORequestOwner;
-//      if (owner == NULL) {
-//        panic("IOSchedulerNoop: Out of request owners!\n");
-//        request->SetStatusAndNotify(B_NO_MEMORY);
-//        return B_NO_MEMORY;
-//      }
-//
-//      owner->team = team_id;
-//      owner->thread = thread_id;
-//      fRequestOwners->InsertUnchecked(owner);
-//
-//      int32 priority = thread_get_io_priority(request->ThreadID());
-//      if (priority >= 0) {
-//        owner->priority = priority;
-//      } else {
-//        owner->priority = B_IDLE_PRIORITY;
-//      }
-//    }
-//
-//    request->SetOwner(owner);
-//    owner->requests.Add(request);
-//  }
-
-
-
+  TRACE("%p->IOSchedulerNoop: Scheduled request %p\n", this, request);
   IOSchedulerRoster::Default()->Notify(IO_SCHEDULER_REQUEST_SCHEDULED, this,
                                        request);
 
-  status_t status = (fDMAResource == NULL)
-                    ? operation->Prepare(request)
-                    : fDMAResource->TranslateNext(request, operation, request->Length());
-  if (status != B_OK) {
-    //if (status == B_BUSY) {
-    // unavailable for now, should enqueue to retry.
-    //}
-    delete operation;
-    AbortRequest(request, status);
-    return status;
+  if (fDMAResource != NULL) {
+    status_t status = fDMAResource->TranslateNext(request, operation, request->Length());
+    if (status != B_OK) {
+      // FIXME:
+      if (status == B_BUSY) {
+        TRACE("%p->IOSchedulerNoop: Resource is busy try %p again later\n", this, request);
+        //unavailable for now, should enqueue to retry.
+      }
+      TRACE("%p->IOSchedulerNoop: Failed to prepare/translate request %p dma=%d, aborting\n", this, request, fDMAResource == NULL ? 0 : 1);
+      delete operation;
+      AbortRequest(request, status);
+      return status;
+    }
+  } else {
+    status_t status = operation->Prepare(request);
+    if (status != B_OK) {
+      // FIXME:
+      if (status == B_BUSY) {
+        TRACE("%p->IOSchedulerNoop: Resource is busy try %p again later\n", this, request);
+        //unavailable for now, should enqueue to retry.
+      }
+      TRACE("%p->IOSchedulerNoop: Failed to prepare/translate request %p dma=%d, aborting\n", this, request, fDMAResource == NULL ? 0 : 1);
+      delete operation;
+      AbortRequest(request, status);
+      return status;
+    }
+
+    operation->SetOriginalRange(request->Offset(), request->Length());
+    request->Advance(request->Length());
   }
 
+  TRACE("%p->IOSchedulerNoop: Request started %p\n", this, operation->Parent());
   IOSchedulerRoster::Default()->Notify(IO_SCHEDULER_OPERATION_STARTED, this, operation->Parent(), operation);
-
   fIOCallback(fIOCallbackData, operation);
 
   return B_OK;
@@ -83,6 +80,7 @@ status_t IOSchedulerNoop::ScheduleRequest(IORequest *request)
 
 void IOSchedulerNoop::AbortRequest(IORequest *request, status_t status)
 {
+  TRACE("%p->IOSchedulerNoop: AbortRequest called %p status=%d\n", this, request, status);
   // FIXME: Implement this. Status B_CANCELLED?
 }
 
@@ -90,6 +88,7 @@ void IOSchedulerNoop::OperationCompleted(IOOperation *operation,
                                          status_t status,
                                          generic_size_t transferredBytes)
 {
+  TRACE("%p->IOSchedulerNoop: Operation completed %p status=%d transferedBytes=%ld\n", this, operation->Parent(), status, transferredBytes);
   if (operation->Status() <= 0) {
     return;
   }
@@ -114,6 +113,7 @@ void IOSchedulerNoop::OperationCompleted(IOOperation *operation,
     fDMAResource->RecycleBuffer(operation->Buffer());
   }
 
+  TRACE("%p->IOSchedulerNoop: Request completed %p\n", this, operation->Parent());
   IOSchedulerRoster::Default()->Notify(
       IO_SCHEDULER_REQUEST_FINISHED, this, request);
   request->NotifyFinished();
