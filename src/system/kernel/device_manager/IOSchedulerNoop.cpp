@@ -14,7 +14,7 @@
 
 #include "IOSchedulerRoster.h"
 
-#define TRACE_IO_SCHEDULER
+//#define TRACE_IO_SCHEDULER
 #ifdef TRACE_IO_SCHEDULER
 #define TRACE(x...) dprintf(x)
 #else
@@ -160,13 +160,12 @@ status_t IOSchedulerNoop::ScheduleRequest(IORequest *request) {
 	MutexLocker locker(fLock);
 
 	fScheduledRequests.Add(request);
+	fNewRequestCondition.NotifyAll();
 
 	IOSchedulerRoster::Default()->Notify(IO_SCHEDULER_REQUEST_SCHEDULED, this,
 										 request);
 	TRACE("%p->IOSchedulerNoop::ScheduleRequest(%p) request scheduled\n", this,
 		  request);
-
-	fNewRequestCondition.NotifyAll();
 
 	return B_OK;
 }
@@ -459,6 +458,7 @@ status_t IOSchedulerNoop::_Scheduler() {
 					  this, request);
 				locker.Lock();
 				fScheduledRequests.Add(request);
+				fNewRequestCondition.NotifyAll();
 			}
 		}
 	}

@@ -22,7 +22,7 @@
 #include "dma_resources.h"
 
 
-#define TRACE_IO_REQUEST
+//#define TRACE_IO_REQUEST
 #ifdef TRACE_IO_REQUEST
 #	define TRACE(x...) dprintf(x)
 #else
