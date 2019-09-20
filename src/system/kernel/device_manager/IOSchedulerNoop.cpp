@@ -273,18 +273,9 @@ status_t IOSchedulerNoop::_Finisher() {
 				: operationOffset);
 
 		// recycle the operation
-		TRACE("%p->IOSchedulerNoop::_Finisher(): operation %p finished so recycling buffer\n",
+		TRACE("%p->IOSchedulerNoop::_Finisher(): operation %p finished\n",
 			  this, operation);
 		MutexLocker _(fLock);
-		if (fDMAResource != NULL) {
-			fDMAResource->RecycleBuffer(operation->Buffer());
-		}
-
-		TRACE("%p->IOSchedulerNoop::_Finisher(): operation %p finished so recycled buffer\n",
-			  this, operation);
-
-		fUnusedOperations.Add(operation);
-		fNewRequestCondition.NotifyAll();
 
 		// If the request is done, we need to perform its notifications.
 		if (request->IsFinished()) {
@@ -296,7 +287,18 @@ status_t IOSchedulerNoop::_Finisher() {
 				TRACE("%p->IOSchedulerNoop::_Finisher(): Setting request %p as unfinished cause remaining bytes is %ld\n",
 					  this, request, request->RemainingBytes());
 				request->SetUnfinished();
+				fRescheduledOperations.Add(operation);
+				fNewRequestCondition.NotifyAll();
 			} else {
+				TRACE("%p->IOSchedulerNoop::_Finisher(): operation %p recycling buffer\n",
+					  this, operation);
+				if (fDMAResource != NULL) {
+					fDMAResource->RecycleBuffer(operation->Buffer());
+				}
+
+				fUnusedOperations.Add(operation);
+				fNewRequestCondition.NotifyAll();
+
 				if (request->HasCallbacks()) {
 					TRACE("%p->IOSchedulerNoop::_Finisher(): request %p has callbacks, enqueuing for notifier thread\n",
 						  this, request);
@@ -317,6 +319,10 @@ status_t IOSchedulerNoop::_Finisher() {
 						  this, request);
 				}
 			}
+		} else {
+			TRACE("%p->IOSchedulerNoop::_Finisher(): Request not finished: %p, rescheduling operation %p.\n", this, request, operation);
+			fRescheduledOperations.Add(operation);
+			fNewRequestCondition.NotifyAll();
 		}
 	}
 
@@ -326,32 +332,50 @@ status_t IOSchedulerNoop::_Finisher() {
 }
 
 bool IOSchedulerNoop::_TrySubmittingRequest(IORequest *request) {
-	// dprintf("%p->IOSchedulerNoop::_PrepareRequestOperations(%p)\n", request);
-	IOOperation *operation = fUnusedOperations.RemoveHead();
-	if (operation == NULL) {
-		return false;
-	}
+	TRACE("%p->IOSchedulerNoop::_PrepareRequestOperations(%p)\n", this, request);
 
 	if (fDMAResource != NULL) {
-		status_t status =
-				fDMAResource->TranslateNext(request, operation,
-											request->Length());
-		if (status != B_OK) {
-			operation->SetParent(NULL);
-			fUnusedOperations.Add(operation);
-			fNewRequestCondition.NotifyAll();
-
-			// B_BUSY means some resource (DMABuffers or
-			// DMABounceBuffers) was temporarily unavailable. That's OK,
-			// we'll retry later.
-			if (status == B_BUSY) {
+		while (request->RemainingBytes() > 0) {
+			IOOperation *operation = fUnusedOperations.RemoveHead();
+			if (operation == NULL) {
 				return false;
 			}
 
-			AbortRequest(request, status);
-			return true;
+			TRACE("%p->IOSchedulerNoop::_TrySubmittingRequest(%p): Translating next batch with %ld remaining bytes.\n",
+					this,
+					request,
+					request->RemainingBytes());
+			status_t status =
+					fDMAResource->TranslateNext(request, operation,
+												request->Length());
+			if (status != B_OK) {
+				operation->SetParent(NULL);
+				fUnusedOperations.Add(operation);
+
+				// B_BUSY means some resource (DMABuffers or
+				// DMABounceBuffers) was temporarily unavailable. That's OK,
+				// we'll retry later.
+				if (status == B_BUSY) {
+					return false;
+				}
+
+				AbortRequest(request, status);
+				return true;
+			}
+
+			IOSchedulerRoster::Default()->Notify(IO_SCHEDULER_OPERATION_STARTED,
+												 this,
+												 operation->Parent(),
+												 operation);
+
+			fIOCallback(fIOCallbackData, operation);
 		}
 	} else {
+		IOOperation *operation = fUnusedOperations.RemoveHead();
+		if (operation == NULL) {
+			return false;
+		}
+
 		// TODO: If the device has block size restrictions, we might need to use
 		// a bounce buffer.
 		status_t status = operation->Prepare(request);
@@ -365,12 +389,12 @@ bool IOSchedulerNoop::_TrySubmittingRequest(IORequest *request) {
 
 		operation->SetOriginalRange(request->Offset(), request->Length());
 		request->Advance(request->Length());
+
+		IOSchedulerRoster::Default()->Notify(IO_SCHEDULER_OPERATION_STARTED, this,
+											 operation->Parent(), operation);
+
+		fIOCallback(fIOCallbackData, operation);
 	}
-
-	IOSchedulerRoster::Default()->Notify(IO_SCHEDULER_OPERATION_STARTED, this,
-										 operation->Parent(), operation);
-
-	fIOCallback(fIOCallbackData, operation);
 
 	return true;
 }
@@ -430,7 +454,7 @@ status_t IOSchedulerNoop::_Scheduler() {
 				TRACE("%p->IOSchedulerNoop::_Scheduler(): Putting request %p back onto the queue because there are no more buffers available\n",
 					  this, request);
 				locker.Lock();
-				fScheduledRequests.RemoveHead();
+				fScheduledRequests.Add(request);
 			}
 		}
 	}
