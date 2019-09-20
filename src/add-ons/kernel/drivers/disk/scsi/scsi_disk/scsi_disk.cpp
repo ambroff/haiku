@@ -31,7 +31,7 @@
 #include "IOSchedulerNoop.h"
 
 
-//#define TRACE_SCSI_DISK
+#define TRACE_SCSI_DISK
 #ifdef TRACE_SCSI_DISK
 #	define TRACE(x...) dprintf("scsi_disk: " x)
 #else
@@ -200,6 +200,7 @@ log2(uint32 x)
 static status_t
 do_io(void* cookie, IOOperation* operation)
 {
+	TRACE("SCSI: Performing operation: %p\n", operation);
 	das_driver_info* info = (das_driver_info*)cookie;
 
 	// TODO: this can go away as soon as we pushed the IOOperation to the upper
@@ -208,6 +209,7 @@ do_io(void* cookie, IOOperation* operation)
 	status_t status = sSCSIPeripheral->io(info->scsi_periph_device, operation,
 		&bytesTransferred);
 
+	TRACE("SCSI: Invoking operation completed callback for operation %p: status=%d, bytes_transfered=%ld\n", operation, status, bytesTransferred);
 	info->io_scheduler->OperationCompleted(operation, status, bytesTransferred);
 	return status;
 }
