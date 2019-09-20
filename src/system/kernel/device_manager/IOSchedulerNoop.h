@@ -13,6 +13,7 @@
 class IOSchedulerNoop : public IOScheduler {
 public:
   IOSchedulerNoop(DMAResource *resource);
+
   virtual ~IOSchedulerNoop();
 
   virtual status_t Init(const char *name);
@@ -20,11 +21,9 @@ public:
   virtual status_t ScheduleRequest(IORequest *request);
 
   virtual void AbortRequest(IORequest *request, status_t status = B_CANCELED);
+
   virtual void OperationCompleted(IOOperation *operation, status_t status,
                                   generic_size_t transferredBytes);
-  // called by the driver when the operation
-  // has been completed successfully or failed
-  // for some reason
 
   virtual void Dump() const;
 
@@ -52,7 +51,6 @@ private:
   IOOperationList fCompletedOperations;
   IOOperationList fRescheduledOperations;
   generic_size_t fBlockSize;
-  int32 fPendingOperations;
   volatile bool fTerminating;
 };
 

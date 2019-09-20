@@ -22,7 +22,7 @@
 #include "dma_resources.h"
 
 
-//#define TRACE_IO_REQUEST
+#define TRACE_IO_REQUEST
 #ifdef TRACE_IO_REQUEST
 #	define TRACE(x...) dprintf(x)
 #else
@@ -881,6 +881,8 @@ IORequest::FinishedCallback(void** _cookie) const
 status_t
 IORequest::Wait(uint32 flags, bigtime_t timeout)
 {
+  TRACE("%p->IORequest::Wait(%d, %ld)\n", this, flags, timeout);
+
 	MutexLocker locker(fLock);
 
 	if (IsFinished() && fIsNotified)
