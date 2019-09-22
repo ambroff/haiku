@@ -80,7 +80,7 @@ typedef struct {
 #include "IOSchedulerStupid.h"
 
 
-#define TRACE_VIRTIO_BLOCK
+//#define TRACE_VIRTIO_BLOCK
 #ifdef TRACE_VIRTIO_BLOCK
 #	define TRACE(x...) dprintf("virtio_block: " x)
 #else

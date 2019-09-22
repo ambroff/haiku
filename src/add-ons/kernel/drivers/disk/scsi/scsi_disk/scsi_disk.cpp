@@ -31,7 +31,7 @@
 #include "IOSchedulerStupid.h"
 
 
-#define TRACE_SCSI_DISK
+//#define TRACE_SCSI_DISK
 #ifdef TRACE_SCSI_DISK
 #	define TRACE(x...) dprintf("scsi_disk: " x)
 #else

@@ -29,6 +29,7 @@ public:
 
 private:
 	generic_size_t fBlockSize;
+	sem_id fConcurrentRequests;
 };
 
 #endif // IO_SCHEDULER_STUPID_H

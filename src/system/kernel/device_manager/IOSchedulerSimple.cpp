@@ -128,7 +128,7 @@ IOSchedulerSimple::Init(const char* name)
 	status_t error = IOScheduler::Init(name);
 	if (error != B_OK)
 		return error;
-
+	
 	size_t count = fDMAResource != NULL ? fDMAResource->BufferCount() : 16;
 	for (size_t i = 0; i < count; i++) {
 		IOOperation* operation = new(std::nothrow) IOOperation;

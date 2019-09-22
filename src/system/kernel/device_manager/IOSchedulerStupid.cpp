@@ -14,7 +14,7 @@
 
 #include "IOSchedulerRoster.h"
 
-#define TRACE_IO_SCHEDULER
+//#define TRACE_IO_SCHEDULER
 #ifdef TRACE_IO_SCHEDULER
 #define TRACE(x...) dprintf(x)
 #else
@@ -22,10 +22,27 @@
 #endif
 
 // #pragma mark -
+class StupidIOOperation : public IOOperation {
+public:
+	StupidIOOperation(sem_id semaphore) : fSemaphore(semaphore)
+	{
+		acquire_sem_etc(fSemaphore, 1, B_RELATIVE_TIMEOUT, INT_MAX);
+	}
+
+	~StupidIOOperation()
+	{
+		release_sem_etc(fSemaphore, 1, B_DO_NOT_RESCHEDULE);
+	}
+
+private:
+	sem_id fSemaphore;
+};
+
+// #pragma mark -
 
 IOSchedulerStupid::IOSchedulerStupid(DMAResource *resource)
 		: IOScheduler(resource),
-		  fBlockSize(0)
+		  fBlockSize(512)
 {
 }
 
@@ -39,10 +56,15 @@ status_t IOSchedulerStupid::Init(const char *name) {
 
 	TRACE("%p->IOSchedulerStupid::Init(%s)\n", this, name);
 
+	size_t concurrent_buffer_count = 16;
+
 	if (fDMAResource != NULL) {
+		concurrent_buffer_count = fDMAResource->BufferCount();
 		fBlockSize = fDMAResource->BlockSize();
-		TRACE("%p->IOSchedulerStupid::Init(%s): Block size is %ld according to DMA device.\n", this, name, fBlockSize);
 	}
+
+	// FIXME: Concatenate name with this string.
+	fConcurrentRequests = create_sem(concurrent_buffer_count, "IOScheduler concurrent requests");
 
 	// FIXME: Should this be hard-coded to 512? It's set to 2KiB when formatting.
 	// It should probably be probed. Linux system says 4096.
@@ -56,29 +78,12 @@ status_t IOSchedulerStupid::Init(const char *name) {
 status_t IOSchedulerStupid::ScheduleRequest(IORequest *request) {
 	TRACE("%p->IOSchedulerStupid::ScheduleRequest(%p)\n", this, request);
 
-	IOBuffer *buffer = request->Buffer();
-
-	// TODO: it would be nice to be able to lock the memory later, but we can't
-	// easily do it in the I/O scheduler without being able to asynchronously
-	// lock memory (via another thread or a dedicated call).
-
-	if (buffer->IsVirtual()) {
-		status_t status = buffer->LockMemory(request->TeamID(),
-											 request->IsWrite());
-		if (status != B_OK) {
-			TRACE("%p->IOSchedulerStupid::ScheduleRequest(%p) unable to lock memory: %d\n",
-				  this, request, status);
-			request->SetStatusAndNotify(status);
-			return status;
-		}
-	}
-
 	IOSchedulerRoster::Default()->Notify(IO_SCHEDULER_REQUEST_SCHEDULED, this,
 										 request);
 	TRACE("%p->IOSchedulerStupid::ScheduleRequest(%p) request scheduled\n", this,
 		  request);
 
-	IOOperation *operation = new(std::nothrow) IOOperation;
+	IOOperation *operation = new(std::nothrow) StupidIOOperation(fConcurrentRequests);
 	if (operation == NULL) {
 		AbortRequest(request, B_NO_MEMORY);
 		return B_NO_MEMORY;
@@ -111,7 +116,7 @@ status_t IOSchedulerStupid::ScheduleRequest(IORequest *request) {
 
 		IOSchedulerRoster::Default()->Notify(IO_SCHEDULER_OPERATION_STARTED,
 											 this,
-											 operation->Parent(),
+											 request,
 											 operation);
 	} else {
 		// TODO: If the device has block size restrictions, we might need to use
@@ -127,12 +132,27 @@ status_t IOSchedulerStupid::ScheduleRequest(IORequest *request) {
 		request->Advance(request->Length());
 
 		IOSchedulerRoster::Default()->Notify(IO_SCHEDULER_OPERATION_STARTED, this,
-											 operation->Parent(), operation);
+											 request, operation);
 
 	}
 
 	TRACE("%p->IOSchedulerStupid::ScheduleRequest(%p): Invoking fIOCallback for operation %p.\n", this, request, operation);
-	fIOCallback(fIOCallbackData, operation);
+	{
+		IOBuffer *buffer = request->Buffer();
+		if (buffer->IsVirtual()) {
+			status_t status = buffer->LockMemory(request->TeamID(),
+												 request->IsWrite());
+			if (status != B_OK) {
+				TRACE("%p->IOSchedulerStupid::ScheduleRequest(%p) unable to lock memory: %d\n",
+					  this, request, status);
+				delete operation;
+				request->SetStatusAndNotify(status);
+				return status;
+			}
+		}
+
+		fIOCallback(fIOCallbackData, operation);
+	}
 	
 	return B_OK;
 }
@@ -165,6 +185,7 @@ void IOSchedulerStupid::OperationCompleted(IOOperation *operation,
 	TRACE("%p->IOSchedulerStupid::OperationCompleted(%p, %d, %ld): Operation enqueued for finishing.\n", this, operation, status, transferredBytes);
 
 	// _Finisher()
+	IORequest *request = operation->Parent();
 	{
 		bool operationFinished = operation->Finish();
 
@@ -173,7 +194,7 @@ void IOSchedulerStupid::OperationCompleted(IOOperation *operation,
 
 		IOSchedulerRoster::Default()->Notify(IO_SCHEDULER_OPERATION_FINISHED,
 											 this,
-											 operation->Parent(), operation);
+											 request, operation);
 
 		TRACE("%p->IOSchedulerStupid::_Finisher(): Operation %p notified to roster\n",
 			  this, operation);
@@ -191,9 +212,8 @@ void IOSchedulerStupid::OperationCompleted(IOOperation *operation,
 			panic("Not implemented to reschedule here");
 			return;
 		}
-
+	
 		// notify request and remove operation
-		IORequest *request = operation->Parent();
 		TRACE("%p->IOSchedulerStupid::_Finisher(): Request %p from operation %p\n",
 			  this, request, operation);
 
