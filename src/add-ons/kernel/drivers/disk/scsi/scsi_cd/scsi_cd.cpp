@@ -26,7 +26,7 @@
 #include <vm/vm_page.h>
 
 #include "IOCache.h"
-#include "IOSchedulerStupid.h"
+#include "IOSchedulerNoop.h"
 
 
 //#define TRACE_CD_DISK
@@ -1012,7 +1012,7 @@ cd_set_capacity(cd_driver_info* info, uint64 capacity, uint32 blockSize)
 		} else {
 			dprintf("scsi_cd: Using IOSchedulerNoop instead of IOCache to "
 				"avoid memory allocation issues.\n");
-			info->io_scheduler = new(std::nothrow) IOSchedulerStupid(
+			info->io_scheduler = new(std::nothrow) IOSchedulerNoop(
 				info->dma_resource);
 		}
 

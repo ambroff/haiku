@@ -31,7 +31,7 @@
 
 #include "dma_resources.h"
 #include "io_requests.h"
-#include "IOSchedulerStupid.h"
+#include "IOSchedulerNoop.h"
 
 
 //#define TRACE_RAM_DISK
@@ -349,7 +349,7 @@ struct RawDevice : Device, DoublyLinkedListLinkImpl<RawDevice> {
 			return error;
 		}
 
-		fIOScheduler = new(std::nothrow) IOSchedulerStupid(fDMAResource);
+		fIOScheduler = new(std::nothrow) IOSchedulerNoop(fDMAResource);
 		if (fIOScheduler == NULL) {
 			Unprepare();
 			return B_NO_MEMORY;

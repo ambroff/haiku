@@ -28,8 +28,6 @@ public:
 	virtual void Dump() const;
 
 private:
-	status_t _Finisher();
-
 	bool _TrySubmittingRequest(IORequest *request);
 
 	status_t _Scheduler();
@@ -40,13 +38,10 @@ private:
 
 	static status_t _RequestNotifierThread(void *self);
 
-	static status_t _FinisherThread(void *self);
-
 private:
 	spinlock fFinisherLock;
 	mutex fLock;
 	thread_id fSchedulerThread;
-	thread_id fFinisherThread;
 	thread_id fRequestNotifierThread;
 	IORequestList fScheduledRequests;
 	IORequestList fFinishedRequests;
@@ -54,7 +49,6 @@ private:
 	ConditionVariable fFinishedOperationCondition;
 	ConditionVariable fFinishedRequestCondition;
 	IOOperationList fUnusedOperations;
-	IOOperationList fCompletedOperations;
 	IOOperationList fRescheduledOperations;
 	generic_size_t fBlockSize;
 	volatile bool fTerminating;
