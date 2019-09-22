@@ -1062,6 +1062,7 @@ _kern_read(int fd, off_t pos, void* buffer, size_t length)
 	if (descriptor->ops->fd_read == NULL)
 		return B_BAD_VALUE;
 
+	// KWA: An example of calling the fd_read() of a block device driver.
 	ssize_t bytesRead = descriptor->ops->fd_read(descriptor, pos, buffer,
 		&length);
 	if (bytesRead >= B_OK) {

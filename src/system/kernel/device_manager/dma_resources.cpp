@@ -16,7 +16,7 @@
 #include "IORequest.h"
 
 
-//#define TRACE_DMA_RESOURCE
+#define TRACE_DMA_RESOURCE
 #ifdef TRACE_DMA_RESOURCE
 #	define TRACE(x...) dprintf(x)
 #else
@@ -158,6 +158,7 @@ status_t
 DMAResource::Init(const dma_restrictions& restrictions,
 	generic_size_t blockSize, uint32 bufferCount, uint32 bounceBufferCount)
 {
+	TRACE("%p->DMAResource::Init(..., %ld, %d, %d)\n", this, blockSize, bufferCount, bounceBufferCount);
 	fRestrictions = restrictions;
 	fBlockSize = blockSize == 0 ? 1 : blockSize;
 	fBufferCount = bufferCount;
@@ -429,7 +430,7 @@ DMAResource::TranslateNext(IORequest* request, IOOperation* operation,
 	generic_io_vec* vecs = NULL;
 	uint32 segmentCount = 0;
 
-	TRACE("  offset %Ld, remaining size: %lu, block size %lu -> partial: %lu\n",
+	TRACE("  offset %ld, remaining size: %lu, block size %lu -> partial: %lu\n",
 		offset, request->RemainingBytes(), fBlockSize, partialBegin);
 
 	if (buffer->IsVirtual()) {
@@ -486,7 +487,7 @@ DMAResource::TranslateNext(IORequest* request, IOOperation* operation,
 	}
 
 #ifdef TRACE_DMA_RESOURCE
-	TRACE("  physical count %lu\n", segmentCount);
+	TRACE("  physical count %u\n", segmentCount);
 	for (uint32 i = 0; i < segmentCount; i++) {
 		TRACE("    [%" B_PRIu32 "] %#" B_PRIxGENADDR ", %" B_PRIxGENADDR "\n",
 			i, vecs[vecIndex + i].base, vecs[vecIndex + i].length);
@@ -539,7 +540,7 @@ DMAResource::TranslateNext(IORequest* request, IOOperation* operation,
 		else
 			transferLeft = 0;
 
-		TRACE("  partial begin, using bounce buffer: offset: %lld, length: "
+		TRACE("  partial begin, using bounce buffer: offset: %ld, length: "
 			"%lu\n", offset, length);
 	}
 
@@ -565,7 +566,7 @@ DMAResource::TranslateNext(IORequest* request, IOOperation* operation,
 
 		if (dmaLength + length > fRestrictions.max_transfer_size) {
 			length = fRestrictions.max_transfer_size - dmaLength;
-			TRACE("  vec %lu: restricting length to %lu due to transfer size "
+			TRACE("  vec %u: restricting length to %lu due to transfer size "
 				"limit\n", i, length);
 		}
 		_RestrictBoundaryAndSegmentSize(base, length);
@@ -576,11 +577,11 @@ DMAResource::TranslateNext(IORequest* request, IOOperation* operation,
 		// Check alignment: if not aligned, use bounce buffer for complete vec.
 		if (base < fRestrictions.low_address) {
 			useBounceBufferSize = fRestrictions.low_address - base;
-			TRACE("  vec %lu: below low address, using bounce buffer: %lu\n", i,
+			TRACE("  vec %u: below low address, using bounce buffer: %lu\n", i,
 				useBounceBufferSize);
 		} else if (base & (fRestrictions.alignment - 1)) {
 			useBounceBufferSize = length;
-			TRACE("  vec %lu: misalignment, using bounce buffer: %lu\n", i,
+			TRACE("  vec %u: misalignment, using bounce buffer: %lu\n", i,
 				useBounceBufferSize);
 		}
 
@@ -598,7 +599,7 @@ DMAResource::TranslateNext(IORequest* request, IOOperation* operation,
 		if (length == 0) {
 			length = maxLength;
 			useBounceBufferSize = length;
-			TRACE("  vec %lu: 0 length, using bounce buffer: %lu\n", i,
+			TRACE("  vec %u: 0 length, using bounce buffer: %lu\n", i,
 				useBounceBufferSize);
 		}
 
@@ -610,14 +611,14 @@ DMAResource::TranslateNext(IORequest* request, IOOperation* operation,
 			length = _AddBounceBuffer(*dmaBuffer, physicalBounceBuffer,
 				bounceLeft, useBounceBufferSize, false);
 			if (length == 0) {
-				TRACE("  vec %lu: out of bounce buffer space\n", i);
+				TRACE("  vec %u: out of bounce buffer space\n", i);
 				// We don't have any bounce buffer space left, we need to move
 				// this request to the next I/O operation.
 				break;
 			}
-			TRACE("  vec %lu: final bounce length: %lu\n", i, length);
+			TRACE("  vec %u: final bounce length: %lu\n", i, length);
 		} else {
-			TRACE("  vec %lu: final length restriction: %lu\n", i, length);
+			TRACE("  vec %u: final length restriction: %lu\n", i, length);
 			dmaBuffer->AddVec(base, length);
 		}
 

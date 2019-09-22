@@ -27,7 +27,7 @@
 
 #include "dma_resources.h"
 #include "io_requests.h"
-#include "IOSchedulerNoop.h"
+#include "IOSchedulerSimple.h"
 
 #include "CheckSum.h"
 
@@ -422,7 +422,7 @@ struct RawDevice : Device, DoublyLinkedListLinkImpl<RawDevice> {
 			return error;
 		}
 
-		fIOScheduler = new(std::nothrow) IOSchedulerNoop(fDMAResource);
+		fIOScheduler = new(std::nothrow) IOSchedulerStupid(fDMAResource);
 		if (fIOScheduler == NULL) {
 			Unprepare();
 			return B_NO_MEMORY;

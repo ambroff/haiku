@@ -28,10 +28,10 @@
 
 #include "dma_resources.h"
 #include "IORequest.h"
-#include "IOSchedulerNoop.h"
+#include "IOSchedulerStupid.h"
 
 
-//#define TRACE_SCSI_DISK
+#define TRACE_SCSI_DISK
 #ifdef TRACE_SCSI_DISK
 #	define TRACE(x...) dprintf("scsi_disk: " x)
 #else
@@ -448,6 +448,7 @@ das_ioctl(void* cookie, uint32 op, void* buffer, size_t length)
 static void
 das_set_capacity(das_driver_info* info, uint64 capacity, uint32 blockSize)
 {
+	//panic("Who is calling this?");
 	TRACE("das_set_capacity(device = %p, capacity = %" B_PRIu64
 		", blockSize = %" B_PRIu32 ")\n", info, capacity, blockSize);
 
@@ -472,7 +473,7 @@ das_set_capacity(das_driver_info* info, uint64 capacity, uint32 blockSize)
 		if (status != B_OK)
 			panic("initializing DMAResource failed: %s", strerror(status));
 
-		info->io_scheduler = new(std::nothrow) IOSchedulerNoop(
+		info->io_scheduler = new(std::nothrow) IOSchedulerStupid(
 			info->dma_resource);
 		if (info->io_scheduler == NULL)
 			panic("allocating IOScheduler failed.");

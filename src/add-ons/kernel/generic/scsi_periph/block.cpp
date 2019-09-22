@@ -61,6 +61,8 @@ periph_check_capacity(scsi_periph_device_info *device, scsi_ccb *request)
 		capacity = B_BENDIAN_TO_HOST_INT32(capacityResult.lba);
 
 		if (capacity == UINT_MAX) {
+			dprintf("KWA capacity == UINT_MAX\n");
+
 			mutex_unlock(&device->mutex);
 
 			scsi_cmd_read_capacity_long *cmd
@@ -90,9 +92,13 @@ periph_check_capacity(scsi_periph_device_info *device, scsi_ccb *request)
 		++capacity;
 
 		blockSize = B_BENDIAN_TO_HOST_INT32(capacityResult.block_size);
+
+		dprintf("KWA extracting block size of %d\n", device->block_size);
 	} else {
 		capacity = 0;
 		blockSize = 0;
+
+		dprintf("KWA set block size to %d as a fallback\n", device->block_size);
 	}
 
 	SHOW_FLOW(3, "capacity = %" B_PRId64 ", block_size = %" B_PRId32, capacity,
@@ -109,6 +115,7 @@ periph_check_capacity(scsi_periph_device_info *device, scsi_ccb *request)
 		device->capacity = -1;
 		return ERR_DEV_GENERAL;
 	}*/
+	dprintf("KWA block device set block size to %d\n", device->block_size);
 
 	mutex_unlock(&device->mutex);
 

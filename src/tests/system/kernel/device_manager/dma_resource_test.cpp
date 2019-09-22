@@ -13,7 +13,7 @@
 
 #include "dma_resources.h"
 #include "io_requests.h"
-#include "IOSchedulerNoop.h"
+#include "IOSchedulerStupid.h"
 
 
 #define DMA_TEST_BLOCK_SIZE				512
@@ -1175,7 +1175,7 @@ dma_test_init_device(void *driverCookie, void **_deviceCookie)
 		return status;
 	}
 
-	sIOScheduler = new(std::nothrow) IOSchedulerNoop(sDMAResource);
+	sIOScheduler = new(std::nothrow) IOSchedulerStupid(sDMAResource);
 	if (sIOScheduler == NULL) {
 		delete sDMAResource;
 		return B_NO_MEMORY;

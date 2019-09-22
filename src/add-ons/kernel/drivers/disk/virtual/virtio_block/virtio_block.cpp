@@ -77,10 +77,10 @@ typedef struct {
 
 #include "dma_resources.h"
 #include "IORequest.h"
-#include "IOSchedulerNoop.h"
+#include "IOSchedulerStupid.h"
 
 
-//#define TRACE_VIRTIO_BLOCK
+#define TRACE_VIRTIO_BLOCK
 #ifdef TRACE_VIRTIO_BLOCK
 #	define TRACE(x...) dprintf("virtio_block: " x)
 #else
@@ -526,7 +526,7 @@ virtio_block_set_capacity(virtio_block_driver_info* info, uint64 capacity,
 		if (status != B_OK)
 			panic("initializing DMAResource failed: %s", strerror(status));
 
-		info->io_scheduler = new(std::nothrow) IOSchedulerNoop(
+		info->io_scheduler = new(std::nothrow) IOSchedulerStupid(
 			info->dma_resource);
 		if (info->io_scheduler == NULL)
 			panic("allocating IOScheduler failed.");
