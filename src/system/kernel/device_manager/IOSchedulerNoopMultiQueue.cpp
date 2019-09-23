@@ -245,14 +245,16 @@ void IOSchedulerNoopMultiQueue::OperationCompleted(IOOperation *operation,
 		? operationOffset + operation->OriginalLength()
 		: operationOffset);
 
-	MutexLocker _(fLock);
-	TRACE("%p->IOSchedulerNoopMultiQueue::_Finisher(): operation %p finished, recycling buffer\n",
-		  this, operation);
-	if (fDMAResource != NULL) {
-		fDMAResource->RecycleBuffer(operation->Buffer());
-	}
+	{
+		MutexLocker _(fLock);
+		TRACE("%p->IOSchedulerNoopMultiQueue::_Finisher(): operation %p finished, recycling buffer\n",
+			  this, operation);
+		if (fDMAResource != NULL) {
+			fDMAResource->RecycleBuffer(operation->Buffer());
+		}
 
-	fUnusedOperations.Add(operation);
+		fUnusedOperations.Add(operation);
+	}
 
 	// FIXME: We should probably not have a single shared pool.
 	for (generic_size_t i = 0; i < fCPUCount; ++i) {
@@ -271,6 +273,7 @@ void IOSchedulerNoopMultiQueue::OperationCompleted(IOOperation *operation,
 			request->SetUnfinished();
 
 			IORequestQueue& queue_info = fIORequestQueues[smp_get_current_cpu()];
+			MutexLocker _(queue_info.fLock);
 			queue_info.fScheduledRequests.Add(request);
 			queue_info.fNewRequestCondition.NotifyAll();
 		} else {
