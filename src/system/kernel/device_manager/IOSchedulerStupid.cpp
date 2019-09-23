@@ -22,6 +22,64 @@
 #endif
 
 // #pragma mark -
+IORequestQueue::IORequestQueue(const char *queue_name)
+	: fTerminating(false),
+	  fQueueName(queue_name)
+{
+	// FIXME: should have a unique names here for different queues
+	mutex_init(&fLock, "I/O scheduler IORequest queue");
+	fNewRequestCondition.Init(this, "I/O scheduler request queue new request available");
+}
+
+IORequestQueue::~IORequestQueue() {
+	mutex_lock(&fLock);
+	mutex_destroy(&fLock);
+
+	if (fQueue.Count() > 0) {
+		panic("IOScheduler deallocated before request queue was drained!");
+	}
+}
+
+status_t IORequestQueue::Init() {
+	return B_OK;
+}
+
+void IORequestQueue::Stop() {
+	fTerminating = true;
+	fNewRequestCondition.NotifyAll();
+}
+
+void IORequestQueue::Enqueue(IORequest *request) {
+	MutexLocker _(fLock);
+	fQueue.Add(request);
+	fNewRequestCondition.NotifyAll();
+}
+
+IORequest* IORequestQueue::Dequeue() {
+	while (!fTerminating) {
+		{
+			MutexLocker _(fLock);
+			IORequest *request = fQueue.RemoveHead();
+			if (request != NULL) {
+				return request;
+			}
+		}
+
+		ConditionVariableEntry entry;
+		fNewRequestCondition.Add(&entry);
+		entry.Wait(B_CAN_INTERRUPT);
+	}
+
+	return NULL;
+}
+
+void IORequestQueue::Dump() const {
+	// FIXME: Have a proper name here.
+	kprintf("  Size of %s queue: %d\n", fQueueName, fQueue.Count());
+}
+
+
+// #pragma mark -
 IOOperationPool::IOOperationPool()
 	: fTerminating(false)
 {
@@ -30,10 +88,6 @@ IOOperationPool::IOOperationPool()
 }
 
 IOOperationPool::~IOOperationPool() {
-	fTerminating = false;
-
-	fNewOperationAvailableCondition.NotifyAll();
-
 	mutex_lock(&fLock);
 	mutex_destroy(&fLock);
 
@@ -55,6 +109,11 @@ status_t IOOperationPool::Init(generic_size_t size) {
 	return B_OK;
 }
 
+void IOOperationPool::Stop() {
+	fTerminating = true;
+	fNewOperationAvailableCondition.NotifyAll();
+}
+
 IOOperation* IOOperationPool::GetFreeOperation() {
 	while (!fTerminating) {
 		{
@@ -73,6 +132,11 @@ IOOperation* IOOperationPool::GetFreeOperation() {
 	return NULL;
 }
 
+IOOperation* IOOperationPool::GetFreeOperationNonBlocking() {
+	MutexLocker _(fLock);
+	return fUnusedOperations.RemoveHead();
+}
+
 void IOOperationPool::ReleaseIOOperation(IOOperation *operation) {
 	operation->SetParent(NULL);
 	MutexLocker _(fLock);
@@ -81,7 +145,7 @@ void IOOperationPool::ReleaseIOOperation(IOOperation *operation) {
 }
 
 void IOOperationPool::Dump() const {
-	kprintf("  Free IOOperations in pool: %d", fUnusedOperations.Count());
+	kprintf("  Free IOOperations in pool: %d\n", fUnusedOperations.Count());
 }
 
 // #pragma mark -
@@ -90,23 +154,25 @@ IOSchedulerStupid::IOSchedulerStupid(DMAResource *resource)
 		: IOScheduler(resource),
 		  fTerminating(false),
 		  fBlockSize(512),
+		  fDelayedRequestQueue("delayed requests"),
+		  fNotifierQueue("finished requests"),
+		  fDelayedRequestThread(-1),
 		  fNotifierThread(-1)
 {
-	mutex_init(&fNotifierLock, "I/O scheduler notifier queue lock");
-	fNotifierCondition.Init(this, "I/O request notifier");
 }
 
 IOSchedulerStupid::~IOSchedulerStupid() {
 	fTerminating = true;
 
-	fNotifierCondition.NotifyAll();
+	fOperationPool.Stop();
+
+	fDelayedRequestQueue.Stop();
+
+	fNotifierQueue.Stop();
 
 	if (fNotifierThread >= 0) {
 		wait_for_thread(fNotifierThread, NULL);
 	}
-
-	mutex_lock(&fNotifierLock);
-	mutex_destroy(&fNotifierLock);
 }
 
 status_t IOSchedulerStupid::Init(const char *name) {
@@ -123,7 +189,15 @@ status_t IOSchedulerStupid::Init(const char *name) {
 		fBlockSize = fDMAResource->BlockSize();
 	}
 
-	fOperationPool.Init(concurrent_buffer_count);
+	status_t init_result = fOperationPool.Init(concurrent_buffer_count);
+	if (init_result != B_OK) {
+		return init_result;
+	}
+
+	init_result = fDelayedRequestQueue.Init();
+	if (init_result != B_OK) {
+		return init_result;
+	}
 
 	// FIXME: Should this be hard-coded to 512? It's set to 2KiB when formatting.
 	// It should probably be probed. Linux system says 4096.
@@ -157,76 +231,23 @@ status_t IOSchedulerStupid::ScheduleRequest(IORequest *request) {
 	TRACE("%p->IOSchedulerStupid::ScheduleRequest(%p) request scheduled\n", this,
 		  request);
 
-	IOOperation *operation = fOperationPool.GetFreeOperation();
-	if (operation == NULL) {
-		AbortRequest(request, B_NO_MEMORY);
-		return B_NO_MEMORY;
-	}
-	
-	// Code from _Scheduler thread.
-	if (fDMAResource != NULL) {
-		generic_size_t max_operation_length = fBlockSize * 1024;
-		TRACE("%p->IOSchedulerStupid::ScheduleRequest(%p): Translating next batch with %ld remaining bytes, limiting operation length to %ld\n",
-				this,
-				request,
-				request->RemainingBytes(),
-				max_operation_length);
-
-		IOBuffer *buffer = request->Buffer();
-		if (buffer->IsVirtual()) {
-			status_t status = buffer->LockMemory(request->TeamID(),
-												 request->IsWrite());
-			if (status != B_OK) {
-				TRACE("%p->IOSchedulerStupid::ScheduleRequest(%p) unable to lock memory: %d\n",
-					  this, request, status);
-				fOperationPool.ReleaseIOOperation(operation);
-				request->SetStatusAndNotify(status);
-				return status;
-			}
+	IOOperation *operation = NULL;
+	if (request->HasCallbacks()) {
+		operation = fOperationPool.GetFreeOperationNonBlocking();
+		if (operation == NULL) {
+			TRACE("%p->IOSchedulerStupid::ScheduleRequest(%p) Request has callbacks and operation pool is empty. Enqueuing request for later.", this, request);
+			fDelayedRequestQueue.Enqueue(request);
+			return B_OK;
 		}
-
-		status_t status =
-				fDMAResource->TranslateNext(request, operation,
-											max_operation_length);
-		if (status != B_OK) {
-			fOperationPool.ReleaseIOOperation(operation);
-
-			// B_BUSY means some resource (DMABuffers or
-			// DMABounceBuffers) was temporarily unavailable. That's OK,
-			// we'll retry later.
-			if (status == B_BUSY) {
-				AbortRequest(request, status);
-			}
-
-			AbortRequest(request, status);
-			return status;
-		}
-
-		IOSchedulerRoster::Default()->Notify(IO_SCHEDULER_OPERATION_STARTED,
-											 this,
-											 request,
-											 operation);
 	} else {
-		// TODO: If the device has block size restrictions, we might need to use
-		// a bounce buffer.
-		status_t status = operation->Prepare(request);
-		if (status != B_OK) {
-			fOperationPool.ReleaseIOOperation(operation);
-			AbortRequest(request, status);
-			return true;
-		}
-
-		operation->SetOriginalRange(request->Offset(), request->Length());
-		request->Advance(request->Length());
-
-		IOSchedulerRoster::Default()->Notify(IO_SCHEDULER_OPERATION_STARTED, this,
-											 request, operation);
-
+		// It's assumed that it's OK to block this thread.
+		// FIXME: What we really need is a ScheduleRequest() that is explicitly not async since we have
+		// many callsights which call ScheduleRequest() and then immediately call request->Wait();
+		operation = fOperationPool.GetFreeOperation();
 	}
 
-	TRACE("%p->IOSchedulerStupid::ScheduleRequest(%p): Invoking fIOCallback for operation %p.\n", this, request, operation);
-	fIOCallback(fIOCallbackData, operation);
-	
+	_SubmitRequest(request, operation);
+
 	return B_OK;
 }
 
@@ -317,18 +338,14 @@ void IOSchedulerStupid::OperationCompleted(IOOperation *operation,
 				TRACE("%p->IOSchedulerStupid::_Finisher(): Setting request %p as unfinished cause remaining bytes is %ld\n",
 					  this, request, request->RemainingBytes());
 				request->SetUnfinished();
-				// FIXME: Need to reschedule this
-				//fScheduledRequests.Add(request);
-				panic("Not implemented to reschedule unfinished");
+				fDelayedRequestQueue.Enqueue(request);
 			} else {
 				if (request->HasCallbacks()) {
 					TRACE("%p->IOSchedulerStupid::_Finisher(): request %p has callbacks, enqueuing for notifier thread\n",
 						  this, request);
 					// The request has callbacks that may take some time to
 					// perform, so we hand it over to the request notifier.
-					MutexLocker _(&fNotifierLock);
-					fNotifierQueue.Add(request);
-					fNotifierCondition.NotifyAll();
+					fNotifierQueue.Enqueue(request);
 				} else {
 					TRACE("%p->IOSchedulerStupid::_Finisher(): request %p has no callbacks. Notifying now.\n",
 						  this, request);
@@ -347,8 +364,9 @@ void IOSchedulerStupid::Dump() const {
 	kprintf("IOSchedulerStupid at %p\n", this);
 	kprintf("  DMA resource:   %p\n", fDMAResource);
 	kprintf("  fBlockSize: %ld\n", fBlockSize);
-	kprintf("  fNotifierQueue size: %d\n", fNotifierQueue.Count());
 	fOperationPool.Dump();
+	fDelayedRequestQueue.Dump();
+	fNotifierQueue.Dump();
 }
 
 /*static*/ status_t IOSchedulerStupid::_NotifierThread(void *self) {
@@ -360,28 +378,11 @@ status_t IOSchedulerStupid::_Notifier() {
 		  this);
 
 	while (true) {
-		MutexLocker locker(fNotifierLock);
-
-		// get a request
-		IORequest *request = fNotifierQueue.RemoveHead();
-		if (request == NULL) {
-			if (fTerminating) {
-				break;
-			}
-
-			TRACE("%p->IOSchedulerStupid::_RequestNotifier(): No finished requests. Waiting...\n",
-				  this);
-
-			ConditionVariableEntry entry;
-			fNotifierCondition.Add(&entry);
-
-			locker.Unlock();
-
-			entry.Wait();
-			continue;
+		TRACE("%p->IOSchedulerStupid::_Notifier(): Waiting for next finished request to notify\n", this);
+		IORequest *request = fNotifierQueue.Dequeue();
+		if (request == NULL && fTerminating) {
+			break;
 		}
-
-		locker.Unlock();
 
 		IOSchedulerRoster::Default()->Notify(IO_SCHEDULER_REQUEST_FINISHED,
 											 this,
@@ -394,5 +395,92 @@ status_t IOSchedulerStupid::_Notifier() {
 	}
 
 	return B_OK;
+}
 
+/*static*/ status_t IOSchedulerStupid::_DelayedRequestThread(void *self) {
+	return reinterpret_cast<IOSchedulerStupid*>(self)->_DelayedRequests();
+}
+
+status_t IOSchedulerStupid::_DelayedRequests() {
+	TRACE("%p->IOSchedulerStupid::_DelayedRequests(): starting delayed request processing thread\n",
+		  this);
+
+	while (true) {
+		IORequest *request = fDelayedRequestQueue.Dequeue();
+		if (request == NULL && fTerminating) {
+			break;
+		}
+
+		IOOperation *operation = fOperationPool.GetFreeOperation();
+
+		_SubmitRequest(request, operation);
+	}
+
+	return B_OK;
+}
+
+void IOSchedulerStupid::_SubmitRequest(IORequest *request, IOOperation *operation) {
+	// Code from _Scheduler thread.
+	if (fDMAResource != NULL) {
+		generic_size_t max_operation_length = fBlockSize * 1024;
+		TRACE("%p->IOSchedulerStupid::ScheduleRequest(%p): Translating next batch with %ld remaining bytes, limiting operation length to %ld\n",
+				this,
+				request,
+				request->RemainingBytes(),
+				max_operation_length);
+
+		IOBuffer *buffer = request->Buffer();
+		if (buffer->IsVirtual()) {
+			status_t status = buffer->LockMemory(request->TeamID(),
+												 request->IsWrite());
+			if (status != B_OK) {
+				TRACE("%p->IOSchedulerStupid::ScheduleRequest(%p) unable to lock memory: %d\n",
+					  this, request, status);
+				fOperationPool.ReleaseIOOperation(operation);
+				request->SetStatusAndNotify(status);
+				return; // Used to be return `status`
+			}
+		}
+
+		status_t status =
+				fDMAResource->TranslateNext(request, operation,
+											max_operation_length);
+		if (status != B_OK) {
+			fOperationPool.ReleaseIOOperation(operation);
+
+			// B_BUSY means some resource (DMABuffers or
+			// DMABounceBuffers) was temporarily unavailable. That's OK,
+			// we'll retry later.
+			if (status == B_BUSY) {
+				AbortRequest(request, status);
+			}
+
+			AbortRequest(request, status);
+			return; // used to be `return status;`
+		}
+
+		IOSchedulerRoster::Default()->Notify(IO_SCHEDULER_OPERATION_STARTED,
+											 this,
+											 request,
+											 operation);
+	} else {
+		// TODO: If the device has block size restrictions, we might need to use
+		// a bounce buffer.
+		status_t status = operation->Prepare(request);
+		if (status != B_OK) {
+			fOperationPool.ReleaseIOOperation(operation);
+			AbortRequest(request, status);
+			return; // Used to be `return true;`
+		}
+
+		operation->SetOriginalRange(request->Offset(), request->Length());
+		request->Advance(request->Length());
+
+		IOSchedulerRoster::Default()->Notify(IO_SCHEDULER_OPERATION_STARTED, this,
+											 request, operation);
+
+	}
+
+	TRACE("%p->IOSchedulerStupid::ScheduleRequest(%p): Invoking fIOCallback for operation %p.\n", this, request, operation);
+	fIOCallback(fIOCallbackData, operation);
 }

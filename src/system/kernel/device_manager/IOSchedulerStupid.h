@@ -17,18 +17,49 @@ public:
 	~IOOperationPool();
 	
 	status_t Init(generic_size_t size);
+
+	void Stop();
 	
 	IOOperation* GetFreeOperation();
+
+	IOOperation* GetFreeOperationNonBlocking();
 
 	void ReleaseIOOperation(IOOperation *operation);
 
 	void Dump() const;
 
 private:
+	// FIXME: Following the pattern of using volatile, but is it even correct?
+	// It should probably use atomic primitives instead.
 	volatile bool fTerminating;
 	mutex fLock;
 	IOOperationList fUnusedOperations;
 	ConditionVariable fNewOperationAvailableCondition;
+};
+
+class IORequestQueue {
+public:
+	IORequestQueue(const char *queue_name);
+
+	~IORequestQueue();
+
+	// FIXME: This should be bounded.
+	status_t Init();
+
+	void Stop();
+
+	void Enqueue(IORequest *request);
+
+	IORequest* Dequeue();
+
+	void Dump() const;
+
+private:
+	volatile bool fTerminating;
+	const char *fQueueName;
+	IORequestList fQueue;
+	mutex fLock;
+	ConditionVariable fNewRequestCondition;
 };
 
 class IOSchedulerStupid : public IOScheduler {
@@ -55,13 +86,20 @@ private:
 
 	IOOperationPool fOperationPool;
 
+	IORequestQueue fDelayedRequestQueue;
+
+	IORequestQueue fNotifierQueue;
+
+	thread_id fDelayedRequestThread;
 	thread_id fNotifierThread;
-	mutex fNotifierLock;
-	ConditionVariable fNotifierCondition;
-	IORequestList fNotifierQueue;
 
 	static status_t _NotifierThread(void *self);
 	status_t _Notifier();
+
+	static status_t _DelayedRequestThread(void *self);
+	status_t _DelayedRequests();
+
+	void _SubmitRequest(IORequest *request, IOOperation *operation);
 };
 
 #endif // IO_SCHEDULER_STUPID_H
