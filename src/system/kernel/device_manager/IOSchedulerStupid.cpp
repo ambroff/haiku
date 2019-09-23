@@ -42,11 +42,25 @@ private:
 
 IOSchedulerStupid::IOSchedulerStupid(DMAResource *resource)
 		: IOScheduler(resource),
-		  fBlockSize(512)
+		  fTerminating(false),
+		  fBlockSize(512),
+		  fNotifierThread(-1)
 {
+	mutex_init(&fNotifierLock, "I/O scheduler notifier queue lock");
+	fNotifierCondition.Init(this, "I/O request notifier");
 }
 
 IOSchedulerStupid::~IOSchedulerStupid() {
+	fTerminating = true;
+
+	fNotifierCondition.NotifyAll();
+
+	if (fNotifierThread >= 0) {
+		wait_for_thread(fNotifierThread, NULL);
+	}
+
+	mutex_lock(&fNotifierLock);
+	mutex_destroy(&fNotifierLock);
 }
 
 status_t IOSchedulerStupid::Init(const char *name) {
@@ -71,6 +85,21 @@ status_t IOSchedulerStupid::Init(const char *name) {
 	if (fBlockSize == 0) {
 		fBlockSize = 512;
 	}
+
+	// Start notifier thread
+	{
+		char buffer[B_OS_NAME_LENGTH];
+		strlcpy(buffer, name, sizeof(buffer));
+		strlcat(buffer, " scheduler notifier ", sizeof(buffer));
+		size_t nameLength = strlen(buffer);
+		snprintf(buffer + nameLength, sizeof(buffer) - nameLength, "%" B_PRId32, fID);
+		fNotifierThread = spawn_kernel_thread(&_NotifierThread, buffer, B_NORMAL_PRIORITY + 2, reinterpret_cast<void*>(this));
+		if (fNotifierThread < B_OK) {
+			return fNotifierThread;
+		}
+	}
+
+	resume_thread(fNotifierThread);
 
 	return B_OK;
 }
@@ -248,13 +277,23 @@ void IOSchedulerStupid::OperationCompleted(IOOperation *operation,
 				//fScheduledRequests.Add(request);
 				panic("Not implemented to reschedule unfinished");
 			} else {
-				TRACE("%p->IOSchedulerStupid::_Finisher(): request %p has no callbacks. Notifying now.\n",
-					  this, request);
-				IOSchedulerRoster::Default()->Notify(IO_SCHEDULER_REQUEST_FINISHED,	this, request);
-				request->NotifyFinished();
+				if (request->HasCallbacks()) {
+					TRACE("%p->IOSchedulerNoop::_Finisher(): request %p has callbacks, enqueuing for notifier thread\n",
+						  this, request);
+					// The request has callbacks that may take some time to
+					// perform, so we hand it over to the request notifier.
+					MutexLocker _(&fNotifierLock);
+					fNotifierQueue.Add(request);
+					fNotifierCondition.NotifyAll();
+				} else {
+					TRACE("%p->IOSchedulerStupid::_Finisher(): request %p has no callbacks. Notifying now.\n",
+						  this, request);
+					IOSchedulerRoster::Default()->Notify(IO_SCHEDULER_REQUEST_FINISHED,	this, request);
+					request->NotifyFinished();
 
-				TRACE("%p->IOSchedulerStupid::_Finisher(): request %p notified\n",
-					  this, request);
+					TRACE("%p->IOSchedulerStupid::_Finisher(): request %p notified\n",
+						  this, request);
+				}
 			}
 		}
 	}
@@ -264,4 +303,51 @@ void IOSchedulerStupid::Dump() const {
 	kprintf("IOSchedulerStupid at %p\n", this);
 	kprintf("  DMA resource:   %p\n", fDMAResource);
 	kprintf("  fBlockSize: %ld\n", fBlockSize);
+	kprintf("  fNotifierQueue size: %d\n", fNotifierQueue.Count());
+}
+
+/*static*/ status_t IOSchedulerStupid::_NotifierThread(void *self) {
+	return reinterpret_cast<IOSchedulerStupid*>(self)->_Notifier();
+}
+
+status_t IOSchedulerStupid::_Notifier() {
+	TRACE("%p->IOSchedulerStupid::_Notifier(): starting request notifier thread\n",
+		  this);
+
+	while (true) {
+		MutexLocker locker(fNotifierLock);
+
+		// get a request
+		IORequest *request = fNotifierQueue.RemoveHead();
+		if (request == NULL) {
+			if (fTerminating) {
+				break;
+			}
+
+			TRACE("%p->IOSchedulerStupid::_RequestNotifier(): No finished requests. Waiting...\n",
+				  this);
+
+			ConditionVariableEntry entry;
+			fNotifierCondition.Add(&entry);
+
+			locker.Unlock();
+
+			entry.Wait();
+			continue;
+		}
+
+		locker.Unlock();
+
+		IOSchedulerRoster::Default()->Notify(IO_SCHEDULER_REQUEST_FINISHED,
+											 this,
+											 request);
+
+		// notify the request
+		TRACE("%p->IOSchedulerStupid::_Notifier(): Calling NotifyFinish() for request %p\n",
+			  this, request);
+		request->NotifyFinished();
+	}
+
+	return B_OK;
+
 }

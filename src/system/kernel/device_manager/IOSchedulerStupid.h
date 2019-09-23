@@ -28,8 +28,18 @@ public:
 	virtual void Dump() const;
 
 private:
+	volatile bool fTerminating;
+
 	generic_size_t fBlockSize;
 	sem_id fConcurrentRequests;
+
+	thread_id fNotifierThread;
+	mutex fNotifierLock;
+	ConditionVariable fNotifierCondition;
+	IORequestList fNotifierQueue;
+
+	static status_t _NotifierThread(void *self);
+	status_t _Notifier();
 };
 
 #endif // IO_SCHEDULER_STUPID_H
