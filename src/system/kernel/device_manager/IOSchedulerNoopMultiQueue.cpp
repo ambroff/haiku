@@ -31,8 +31,10 @@ IOSchedulerNoopMultiQueue::IOSchedulerNoopMultiQueue(DMAResource *resource)
 
 	fIORequestQueues = new IORequestQueue[fCPUCount];
 	for (generic_size_t i = 0; i < fCPUCount; ++i) {
-		fIORequestQueues[i].fNewRequestCondition.Init(this, "I/O new request");
-		fIORequestQueues[i].fSelf = this;
+		auto& queue_info = fIORequestQueues[i];
+		mutex_init(&queue_info.fLock, "I/O scheduler");
+		queue_info.fNewRequestCondition.Init(this, "I/O new request");
+		queue_info.fSelf = this;
 	}
 
 	fFinishedOperationCondition.Init(this, "I/O finished operation");
@@ -160,9 +162,7 @@ status_t IOSchedulerNoopMultiQueue::ScheduleRequest(IORequest *request) {
 
 	// FIXME: This should probably be smp_get_current_cpu(), and we'll have
 	// a shard per CPU.
-	int queue_idx = smp_get_current_cpu() % fCPUCount;  // This modulus is probably not necessary but... just in case the cpu count can change.
-	auto& queue_info = fIORequestQueues[queue_idx];
-
+	auto& queue_info = fIORequestQueues[smp_get_current_cpu()];
 	{
 		MutexLocker locker(queue_info.fLock);
 
