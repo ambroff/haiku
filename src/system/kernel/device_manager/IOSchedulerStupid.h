@@ -15,6 +15,8 @@ public:
 	IOOperationPool();
 
 	~IOOperationPool();
+
+	IOOperationPool(const IOOperationPool& rhs) = delete;
 	
 	status_t Init(generic_size_t size);
 
@@ -42,6 +44,8 @@ public:
 	IORequestQueue(const char *queue_name);
 
 	~IORequestQueue();
+
+	IORequestQueue(const IORequestQueue& rhs) = delete;
 
 	// FIXME: This should be bounded.
 	status_t Init();
