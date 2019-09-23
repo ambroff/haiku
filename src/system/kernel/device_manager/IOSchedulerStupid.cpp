@@ -170,6 +170,10 @@ IOSchedulerStupid::~IOSchedulerStupid() {
 
 	fNotifierQueue.Stop();
 
+	if (fDelayedRequestThread >= 0) {
+		wait_for_thread(fDelayedRequestThread, NULL);
+	}
+
 	if (fNotifierThread >= 0) {
 		wait_for_thread(fNotifierThread, NULL);
 	}
@@ -216,9 +220,19 @@ status_t IOSchedulerStupid::Init(const char *name) {
 		if (fNotifierThread < B_OK) {
 			return fNotifierThread;
 		}
+
+		strlcpy(buffer, name, sizeof(buffer));
+		strlcat(buffer, " scheduler delayed request handler ", sizeof(buffer));
+		nameLength = strlen(buffer);
+		snprintf(buffer + nameLength, sizeof(buffer) - nameLength, "%" B_PRId32, fID);
+		fDelayedRequestThread = spawn_kernel_thread(&_DelayedRequestThread, buffer, B_NORMAL_PRIORITY + 2, reinterpret_cast<void*>(this));
+		if (fDelayedRequestThread < B_OK) {
+			return fDelayedRequestThread;
+		}
 	}
 
 	resume_thread(fNotifierThread);
+	resume_thread(fDelayedRequestThread);
 
 	return B_OK;
 }
