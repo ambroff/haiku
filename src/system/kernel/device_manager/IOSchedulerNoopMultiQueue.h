@@ -1,5 +1,5 @@
-#ifndef IO_SCHEDULER_MULTIQUEUE_H
-#define IO_SCHEDULER_MULTIQUEUE_H
+#ifndef IO_SCHEDULER_NOOP_MULTIQUEUE_H
+#define IO_SCHEDULER_NOOP_MULTIQUEUE_H
 
 #include <KernelExport.h>
 
@@ -17,11 +17,11 @@
 //
 // TODO: Switch to a spinlock?
 
-class IOSchedulerMultiQueue : public IOScheduler {
+class IOSchedulerNoopMultiQueue : public IOScheduler {
 public:
-	IOSchedulerMultiQueue(DMAResource *resource);
+	IOSchedulerNoopMultiQueue(DMAResource *resource);
 
-	virtual ~IOSchedulerMultiQueue();
+	virtual ~IOSchedulerNoopMultiQueue();
 
 	virtual status_t Init(const char *name);
 
@@ -34,10 +34,20 @@ public:
 
 	virtual void Dump() const;
 
+	// Rename to shard?
+	struct IORequestQueue {
+		mutex fLock;
+		thread_id fSchedulerThread;
+		IORequestList fScheduledRequests;
+		IOOperationList fRescheduledOperations;
+		ConditionVariable fNewRequestCondition;
+		IOSchedulerNoopMultiQueue *fSelf;
+	};
+
 private:
 	bool _TrySubmittingRequest(IORequest *request);
 
-	status_t _Scheduler();
+	status_t _Scheduler(IORequestQueue *request_queue);
 
 	static status_t _SchedulerThread(void *self);
 
@@ -45,20 +55,18 @@ private:
 
 	static status_t _RequestNotifierThread(void *self);
 
-private:
-	spinlock fFinisherLock;
+	IORequestQueue *fIORequestQueues;
+
 	mutex fLock;
-	thread_id fSchedulerThread;
+	spinlock fFinisherLock;
 	thread_id fRequestNotifierThread;
-	IORequestList fScheduledRequests;
 	IORequestList fFinishedRequests;
-	ConditionVariable fNewRequestCondition;
 	ConditionVariable fFinishedOperationCondition;
 	ConditionVariable fFinishedRequestCondition;
 	IOOperationList fUnusedOperations;
-	IOOperationList fRescheduledOperations;
 	generic_size_t fBlockSize;
+	generic_size_t fCPUCount;
 	volatile bool fTerminating;
 };
 
-#endif // IO_SCHEDULER_MULTIQUEUE_H
+#endif // IO_SCHEDULER_NOOP_MULTIQUEUE_H

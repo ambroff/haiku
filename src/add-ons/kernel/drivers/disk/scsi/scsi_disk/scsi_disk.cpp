@@ -28,7 +28,7 @@
 
 #include "dma_resources.h"
 #include "IORequest.h"
-#include "IOSchedulerNoop.h"
+#include "IOSchedulerNoopMultiQueue.h"
 
 
 //#define TRACE_SCSI_DISK
@@ -473,7 +473,7 @@ das_set_capacity(das_driver_info* info, uint64 capacity, uint32 blockSize)
 		if (status != B_OK)
 			panic("initializing DMAResource failed: %s", strerror(status));
 
-		info->io_scheduler = new(std::nothrow) IOSchedulerNoop(
+		info->io_scheduler = new(std::nothrow) IOSchedulerNoopMultiQueue(
 			info->dma_resource);
 		if (info->io_scheduler == NULL)
 			panic("allocating IOScheduler failed.");
