@@ -33,7 +33,7 @@ IOSchedulerNoopMultiQueue::IOSchedulerNoopMultiQueue(DMAResource *resource)
 	for (generic_size_t i = 0; i < fCPUCount; ++i) {
 		auto& queue_info = fIORequestQueues[i];
 		mutex_init(&queue_info.fLock, "I/O scheduler");
-		queue_info.fNewRequestCondition.Init(this, "I/O new request");
+		queue_info.fNewRequestCondition.Init(&queue_info, "I/O new request");
 		queue_info.fSelf = this;
 	}
 
@@ -332,7 +332,11 @@ bool IOSchedulerNoopMultiQueue::_TrySubmittingRequest(IORequest *request) {
 											max_operation_length);
 		if (status != B_OK) {
 			operation->SetParent(NULL);
-			fUnusedOperations.Add(operation);
+
+			{
+				MutexLocker _(fLock);
+				fUnusedOperations.Add(operation);
+			}
 
 			// FIXME: We shouldn't have a single shared operation pool
 			for (generic_size_t i = 0; i < fCPUCount; ++i) {
@@ -368,7 +372,11 @@ bool IOSchedulerNoopMultiQueue::_TrySubmittingRequest(IORequest *request) {
 		status_t status = operation->Prepare(request);
 		if (status != B_OK) {
 			operation->SetParent(NULL);
-			fUnusedOperations.Add(operation);
+
+			{
+				MutexLocker _(fLock);
+				fUnusedOperations.Add(operation);
+			}
 
 			// FIXME: We shouldn't have a shared pool of operations.
 			for (generic_size_t i = 0; i < fCPUCount; ++i) {
