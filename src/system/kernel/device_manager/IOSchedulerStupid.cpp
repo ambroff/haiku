@@ -22,20 +22,67 @@
 #endif
 
 // #pragma mark -
-class StupidIOOperation : public IOOperation {
-public:
-	StupidIOOperation(sem_id semaphore) : fSemaphore(semaphore)
-	{
+IOOperationPool::IOOperationPool()
+	: fTerminating(false)
+{
+	mutex_init(&fLock, "I/O scheduler IOOperation pool");
+	fNewOperationAvailableCondition.Init(this, "I/O schedule IOOperation pool new available");
+}
+
+IOOperationPool::~IOOperationPool() {
+	fTerminating = false;
+
+	fNewOperationAvailableCondition.NotifyAll();
+
+	mutex_lock(&fLock);
+	mutex_destroy(&fLock);
+
+	while (IOOperation *operation = fUnusedOperations.RemoveHead()) {
+		delete operation;
+	}
+}
+
+status_t IOOperationPool::Init(generic_size_t size) {
+	for (generic_size_t i = 0; i < size; ++i) {
+		IOOperation *operation = new(std::nothrow) IOOperation;
+		if (operation == NULL) {
+			return B_NO_MEMORY;
+		}
+
+		fUnusedOperations.Add(operation);
 	}
 
-	~StupidIOOperation()
-	{
-		release_sem_etc(fSemaphore, 1, B_DO_NOT_RESCHEDULE);
+	return B_OK;
+}
+
+IOOperation* IOOperationPool::GetFreeOperation() {
+	while (!fTerminating) {
+		{
+			MutexLocker _(fLock);
+			IOOperation *operation = fUnusedOperations.RemoveHead();
+			if (operation != NULL) {
+				return operation;
+			}
+		}
+
+		ConditionVariableEntry entry;
+		fNewOperationAvailableCondition.Add(&entry);
+		entry.Wait(B_CAN_INTERRUPT);
 	}
 
-private:
-	sem_id fSemaphore;
-};
+	return NULL;
+}
+
+void IOOperationPool::ReleaseIOOperation(IOOperation *operation) {
+	operation->SetParent(NULL);
+	MutexLocker _(fLock);
+	fUnusedOperations.Add(operation);
+	fNewOperationAvailableCondition.NotifyAll();
+}
+
+void IOOperationPool::Dump() const {
+	kprintf("  Free IOOperations in pool: %d", fUnusedOperations.Count());
+}
 
 // #pragma mark -
 
@@ -76,8 +123,7 @@ status_t IOSchedulerStupid::Init(const char *name) {
 		fBlockSize = fDMAResource->BlockSize();
 	}
 
-	// FIXME: Concatenate name with this string.
-	fConcurrentRequests = create_sem(concurrent_buffer_count, "IOScheduler concurrent requests");
+	fOperationPool.Init(concurrent_buffer_count);
 
 	// FIXME: Should this be hard-coded to 512? It's set to 2KiB when formatting.
 	// It should probably be probed. Linux system says 4096.
@@ -111,11 +157,7 @@ status_t IOSchedulerStupid::ScheduleRequest(IORequest *request) {
 	TRACE("%p->IOSchedulerStupid::ScheduleRequest(%p) request scheduled\n", this,
 		  request);
 
-	status_t result = acquire_sem_etc(fConcurrentRequests, 1, B_ABSOLUTE_TIMEOUT, LONG_MAX);
-	if (result != B_OK) {
-		return result;
-	}
-	IOOperation *operation = new(std::nothrow) StupidIOOperation(fConcurrentRequests);
+	IOOperation *operation = fOperationPool.GetFreeOperation();
 	if (operation == NULL) {
 		AbortRequest(request, B_NO_MEMORY);
 		return B_NO_MEMORY;
@@ -129,11 +171,25 @@ status_t IOSchedulerStupid::ScheduleRequest(IORequest *request) {
 				request,
 				request->RemainingBytes(),
 				max_operation_length);
+
+		IOBuffer *buffer = request->Buffer();
+		if (buffer->IsVirtual()) {
+			status_t status = buffer->LockMemory(request->TeamID(),
+												 request->IsWrite());
+			if (status != B_OK) {
+				TRACE("%p->IOSchedulerStupid::ScheduleRequest(%p) unable to lock memory: %d\n",
+					  this, request, status);
+				fOperationPool.ReleaseIOOperation(operation);
+				request->SetStatusAndNotify(status);
+				return status;
+			}
+		}
+
 		status_t status =
 				fDMAResource->TranslateNext(request, operation,
 											max_operation_length);
 		if (status != B_OK) {
-			delete operation;
+			fOperationPool.ReleaseIOOperation(operation);
 
 			// B_BUSY means some resource (DMABuffers or
 			// DMABounceBuffers) was temporarily unavailable. That's OK,
@@ -155,7 +211,7 @@ status_t IOSchedulerStupid::ScheduleRequest(IORequest *request) {
 		// a bounce buffer.
 		status_t status = operation->Prepare(request);
 		if (status != B_OK) {
-			delete operation;
+			fOperationPool.ReleaseIOOperation(operation);
 			AbortRequest(request, status);
 			return true;
 		}
@@ -169,22 +225,7 @@ status_t IOSchedulerStupid::ScheduleRequest(IORequest *request) {
 	}
 
 	TRACE("%p->IOSchedulerStupid::ScheduleRequest(%p): Invoking fIOCallback for operation %p.\n", this, request, operation);
-	{
-		IOBuffer *buffer = request->Buffer();
-		if (buffer->IsVirtual()) {
-			status_t status = buffer->LockMemory(request->TeamID(),
-												 request->IsWrite());
-			if (status != B_OK) {
-				TRACE("%p->IOSchedulerStupid::ScheduleRequest(%p) unable to lock memory: %d\n",
-					  this, request, status);
-				delete operation;
-				request->SetStatusAndNotify(status);
-				return status;
-			}
-		}
-
-		fIOCallback(fIOCallbackData, operation);
-	}
+	fIOCallback(fIOCallbackData, operation);
 	
 	return B_OK;
 }
@@ -264,7 +305,7 @@ void IOSchedulerStupid::OperationCompleted(IOOperation *operation,
 			fDMAResource->RecycleBuffer(operation->Buffer());
 		}
 
-		delete operation;
+		fOperationPool.ReleaseIOOperation(operation);
 
 		// If the request is done, we need to perform its notifications.
 		if (request->IsFinished()) {
@@ -307,6 +348,7 @@ void IOSchedulerStupid::Dump() const {
 	kprintf("  DMA resource:   %p\n", fDMAResource);
 	kprintf("  fBlockSize: %ld\n", fBlockSize);
 	kprintf("  fNotifierQueue size: %d\n", fNotifierQueue.Count());
+	fOperationPool.Dump();
 }
 
 /*static*/ status_t IOSchedulerStupid::_NotifierThread(void *self) {

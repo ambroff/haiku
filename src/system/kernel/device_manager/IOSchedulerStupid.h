@@ -10,6 +10,27 @@
 #include "IOScheduler.h"
 #include "dma_resources.h"
 
+class IOOperationPool {
+public:
+	IOOperationPool();
+
+	~IOOperationPool();
+	
+	status_t Init(generic_size_t size);
+	
+	IOOperation* GetFreeOperation();
+
+	void ReleaseIOOperation(IOOperation *operation);
+
+	void Dump() const;
+
+private:
+	volatile bool fTerminating;
+	mutex fLock;
+	IOOperationList fUnusedOperations;
+	ConditionVariable fNewOperationAvailableCondition;
+};
+
 class IOSchedulerStupid : public IOScheduler {
 public:
 	IOSchedulerStupid(DMAResource *resource);
@@ -31,7 +52,8 @@ private:
 	volatile bool fTerminating;
 
 	generic_size_t fBlockSize;
-	sem_id fConcurrentRequests;
+
+	IOOperationPool fOperationPool;
 
 	thread_id fNotifierThread;
 	mutex fNotifierLock;
