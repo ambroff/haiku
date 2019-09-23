@@ -160,8 +160,6 @@ status_t IOSchedulerNoopMultiQueue::ScheduleRequest(IORequest *request) {
 		}
 	}
 
-	// FIXME: This should probably be smp_get_current_cpu(), and we'll have
-	// a shard per CPU.
 	auto& queue_info = fIORequestQueues[smp_get_current_cpu()];
 	{
 		MutexLocker locker(queue_info.fLock);
@@ -314,7 +312,7 @@ void IOSchedulerNoopMultiQueue::Dump() const {
 }
 
 bool IOSchedulerNoopMultiQueue::_TrySubmittingRequest(IORequest *request) {
-	TRACE("%p->IOSchedulerNoopMultiQueue::_PrepareRequestOperations(%p)\n", this, request);
+	TRACE("%p->IOSchedulerNoopMultiQueue::_TrySubmittingRequest(%p)\n", this, request);
 
 	if (fDMAResource != NULL) {
 		// FIXME: The original code did this in a loop until request->RemainingBytes() <= 0
