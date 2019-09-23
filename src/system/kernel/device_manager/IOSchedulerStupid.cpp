@@ -26,7 +26,6 @@ class StupidIOOperation : public IOOperation {
 public:
 	StupidIOOperation(sem_id semaphore) : fSemaphore(semaphore)
 	{
-		acquire_sem_etc(fSemaphore, 1, B_RELATIVE_TIMEOUT, INT_MAX);
 	}
 
 	~StupidIOOperation()
@@ -112,6 +111,10 @@ status_t IOSchedulerStupid::ScheduleRequest(IORequest *request) {
 	TRACE("%p->IOSchedulerStupid::ScheduleRequest(%p) request scheduled\n", this,
 		  request);
 
+	status_t result = acquire_sem_etc(fConcurrentRequests, 1, B_ABSOLUTE_TIMEOUT, LONG_MAX);
+	if (result != B_OK) {
+		return result;
+	}
 	IOOperation *operation = new(std::nothrow) StupidIOOperation(fConcurrentRequests);
 	if (operation == NULL) {
 		AbortRequest(request, B_NO_MEMORY);
@@ -121,7 +124,7 @@ status_t IOSchedulerStupid::ScheduleRequest(IORequest *request) {
 	// Code from _Scheduler thread.
 	if (fDMAResource != NULL) {
 		generic_size_t max_operation_length = fBlockSize * 1024;
-		TRACE("%p->IOSchedulerStupid::_TrySubmittingRequest(%p): Translating next batch with %ld remaining bytes, limiting operation length to %ld\n",
+		TRACE("%p->IOSchedulerStupid::ScheduleRequest(%p): Translating next batch with %ld remaining bytes, limiting operation length to %ld\n",
 				this,
 				request,
 				request->RemainingBytes(),
@@ -278,7 +281,7 @@ void IOSchedulerStupid::OperationCompleted(IOOperation *operation,
 				panic("Not implemented to reschedule unfinished");
 			} else {
 				if (request->HasCallbacks()) {
-					TRACE("%p->IOSchedulerNoop::_Finisher(): request %p has callbacks, enqueuing for notifier thread\n",
+					TRACE("%p->IOSchedulerStupid::_Finisher(): request %p has callbacks, enqueuing for notifier thread\n",
 						  this, request);
 					// The request has callbacks that may take some time to
 					// perform, so we hand it over to the request notifier.
