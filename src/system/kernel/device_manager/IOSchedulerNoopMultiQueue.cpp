@@ -31,7 +31,7 @@ IOSchedulerNoopMultiQueue::IOSchedulerNoopMultiQueue(DMAResource *resource)
 
 	fIORequestQueues = new IORequestQueue[fCPUCount];
 	for (generic_size_t i = 0; i < fCPUCount; ++i) {
-		auto& queue_info = fIORequestQueues[i];
+		IORequestQueue& queue_info = fIORequestQueues[i];
 		mutex_init(&queue_info.fLock, "I/O scheduler");
 		queue_info.fNewRequestCondition.Init(&queue_info, "I/O new request");
 		queue_info.fSelf = this;
@@ -103,7 +103,7 @@ status_t IOSchedulerNoopMultiQueue::Init(const char *name) {
 	size_t nameLength = strlen(buffer);
 
 	for (generic_size_t i = 0; i < fCPUCount; ++i) {
-		auto& queue_info = fIORequestQueues[i];
+		IORequestQueue& queue_info = fIORequestQueues[i];
 
 		strlcpy(buffer, name, sizeof(buffer));
 		strlcat(buffer, " scheduler ", sizeof(buffer));
@@ -160,7 +160,7 @@ status_t IOSchedulerNoopMultiQueue::ScheduleRequest(IORequest *request) {
 		}
 	}
 
-	auto& queue_info = fIORequestQueues[smp_get_current_cpu()];
+	IORequestQueue& queue_info = fIORequestQueues[smp_get_current_cpu()];
 	{
 		MutexLocker locker(queue_info.fLock);
 
@@ -224,7 +224,7 @@ void IOSchedulerNoopMultiQueue::OperationCompleted(IOOperation *operation,
 		MutexLocker _(fLock);
 		operation->SetTransferredBytes(0);
 
-		auto& queue_info = fIORequestQueues[smp_get_current_cpu()];
+		IORequestQueue& queue_info = fIORequestQueues[smp_get_current_cpu()];
 		queue_info.fRescheduledOperations.Add(operation);
 		queue_info.fNewRequestCondition.NotifyAll();
 		return;
@@ -270,7 +270,7 @@ void IOSchedulerNoopMultiQueue::OperationCompleted(IOOperation *operation,
 				  this, request, request->RemainingBytes());
 			request->SetUnfinished();
 
-			auto& queue_info = fIORequestQueues[smp_get_current_cpu()];
+			IORequestQueue& queue_info = fIORequestQueues[smp_get_current_cpu()];
 			queue_info.fScheduledRequests.Add(request);
 			queue_info.fNewRequestCondition.NotifyAll();
 		} else {
