@@ -505,7 +505,7 @@ void IOSchedulerStupid::SubmitRequest(IORequest *request, IOOperation *operation
 	// Code from _Scheduler thread.
 	if (fDMAResource != NULL) {
 		generic_size_t max_operation_length = fBlockSize * 1024;
-		TRACE("%p->IOSchedulerStupid::ScheduleRequest(%p): Translating next batch with %ld remaining bytes, limiting operation length to %ld\n",
+		TRACE("%p->IOSchedulerStupid::SubmitRequest(%p): Translating next batch with %ld remaining bytes, limiting operation length to %ld\n",
 				this,
 				request,
 				request->RemainingBytes(),
@@ -516,7 +516,7 @@ void IOSchedulerStupid::SubmitRequest(IORequest *request, IOOperation *operation
 			status_t status = buffer->LockMemory(request->TeamID(),
 												 request->IsWrite());
 			if (status != B_OK) {
-				TRACE("%p->IOSchedulerStupid::ScheduleRequest(%p) unable to lock memory: %d\n",
+				TRACE("%p->IOSchedulerStupid::SubmitRequest(%p) unable to lock memory: %d\n",
 					  this, request, status);
 				fOperationPool.ReleaseIOOperation(operation);
 				request->SetStatusAndNotify(status);
@@ -563,6 +563,6 @@ void IOSchedulerStupid::SubmitRequest(IORequest *request, IOOperation *operation
 
 	}
 
-	TRACE("%p->IOSchedulerStupid::ScheduleRequest(%p): Invoking fIOCallback for operation %p.\n", this, request, operation);
+	TRACE("%p->IOSchedulerStupid::SubmitRequest(%p): Invoking fIOCallback for operation %p.\n", this, request, operation);
 	fIOCallback(fIOCallbackData, operation);
 }
