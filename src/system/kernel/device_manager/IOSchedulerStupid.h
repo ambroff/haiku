@@ -66,7 +66,45 @@ private:
 	ConditionVariable fNewRequestCondition;
 };
 
-class IOSchedulerStupid : public IOScheduler {
+class IOSchedulerDelegate {
+public:
+	virtual ~IOSchedulerDelegate() = default;
+
+	virtual void SubmitRequest(IORequest *request) = 0;
+};
+
+class IOSchedulerShard {
+public:
+	IOSchedulerShard();
+
+	IOSchedulerShard(const IOSchedulerShard& rhs) = delete;
+
+	status_t Init(const char *name,
+				  IOSchedulerDelegate *scheduler,
+				  int32 scheduler_id,
+				  int32 shard_id);
+
+	void Stop();
+
+	void Submit(IORequest *request);
+
+	void Dump() const;
+
+private:
+	IOSchedulerDelegate *fScheduler;
+	int32 fSchedulerId;
+	int32 fShardId;
+	volatile bool fTerminating;
+	thread_id fThreadId;
+
+	IORequestQueue fRequestQueue;
+
+	status_t _Mainloop();
+
+	static status_t _MainloopThread(void *self);
+};
+
+class IOSchedulerStupid : public IOScheduler, public IOSchedulerDelegate {
 public:
 	IOSchedulerStupid(DMAResource *resource);
 
@@ -83,6 +121,9 @@ public:
 
 	virtual void Dump() const;
 
+	virtual void SubmitRequest(IORequest *request);
+	virtual void SubmitRequest(IORequest *request, IOOperation *operation);
+
 private:
 	volatile bool fTerminating;
 
@@ -90,20 +131,13 @@ private:
 
 	IOOperationPool fOperationPool;
 
-	IORequestQueue fDelayedRequestQueue;
+	generic_size_t fCpuCount;
+	IOSchedulerShard *fIOSchedulerShards;
 
 	IORequestQueue fNotifierQueue;
-
-	thread_id fDelayedRequestThread;
 	thread_id fNotifierThread;
-
 	static status_t _NotifierThread(void *self);
 	status_t _Notifier();
-
-	static status_t _DelayedRequestThread(void *self);
-	status_t _DelayedRequests();
-
-	void _SubmitRequest(IORequest *request, IOOperation *operation);
 };
 
 #endif // IO_SCHEDULER_STUPID_H

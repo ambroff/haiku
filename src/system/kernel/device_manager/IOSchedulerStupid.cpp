@@ -22,6 +22,73 @@
 #endif
 
 // #pragma mark -
+IOSchedulerShard::IOSchedulerShard()
+	: fTerminating(false),
+	  fRequestQueue("IORequest queue")
+{
+}
+
+status_t IOSchedulerShard::Init(const char *name, IOSchedulerDelegate *scheduler, int32 scheduler_id, int32 shard_id) {
+	fScheduler = scheduler;
+	fSchedulerId = scheduler_id;
+	fShardId = shard_id;
+
+	// FIXME: Set name properly
+	status_t result = fRequestQueue.Init();
+	if (result != B_OK) {
+		return result;
+	}
+
+	char buffer[B_OS_NAME_LENGTH];
+	strlcpy(buffer, name, sizeof(buffer));
+	strlcat(buffer, " scheduler request ", sizeof(buffer));
+	size_t nameLength = strlen(buffer);
+	snprintf(buffer + nameLength, sizeof(buffer) - nameLength, "%" B_PRId32 " %" B_PRId32, fSchedulerId, fShardId);
+	fThreadId = spawn_kernel_thread(&_MainloopThread, buffer, B_NORMAL_PRIORITY + 2, reinterpret_cast<void*>(this));
+	if (fThreadId < B_OK) {
+		return fThreadId;
+	}
+
+	resume_thread(fThreadId);
+
+	return B_OK;
+}
+
+void IOSchedulerShard::Stop() {
+	fTerminating = true;
+	fRequestQueue.Stop();
+	if (fThreadId >= 0) {
+		wait_for_thread(fThreadId, NULL);
+	}
+}
+
+void IOSchedulerShard::Submit(IORequest *request) {
+	fRequestQueue.Enqueue(request);
+}
+
+void IOSchedulerShard::Dump() const {
+	dprintf("  IOSchedulerShard(%p) id=%d shard=%d\n", this, fSchedulerId, fShardId);
+	fRequestQueue.Dump();
+}
+
+status_t IOSchedulerShard::_Mainloop() {
+	while (true) {
+		IORequest *request = fRequestQueue.Dequeue();
+		if (request == NULL && fTerminating) {
+			break;
+		}
+
+		fScheduler->SubmitRequest(request);
+	}
+
+	return B_OK;
+}
+
+/*static*/ status_t IOSchedulerShard::_MainloopThread(void *self) {
+	return reinterpret_cast<IOSchedulerShard*>(self)->_Mainloop();
+}
+
+// #pragma mark -
 IORequestQueue::IORequestQueue(const char *queue_name)
 	: fTerminating(false),
 	  fQueueName(queue_name)
@@ -50,24 +117,33 @@ void IORequestQueue::Stop() {
 }
 
 void IORequestQueue::Enqueue(IORequest *request) {
+	TRACE("IORequestQueue(%p)::Enqueue(%p)\n", this, request);
 	MutexLocker _(fLock);
 	fQueue.Add(request);
 	fNewRequestCondition.NotifyAll();
 }
 
 IORequest* IORequestQueue::Dequeue() {
-	while (!fTerminating) {
-		{
-			MutexLocker _(fLock);
-			IORequest *request = fQueue.RemoveHead();
-			if (request != NULL) {
-				return request;
-			}
+	while (true) {
+		MutexLocker locker(fLock);
+
+		IORequest *request = fQueue.RemoveHead();
+		if (request != NULL) {
+			return request;
 		}
 
+		if (fTerminating) {
+			break;
+		}
+
+		TRACE("IORequestQueue(%p)::Dequeue(): Waiting for next request to arrive\n", this);
 		ConditionVariableEntry entry;
 		fNewRequestCondition.Add(&entry);
+
+		locker.Unlock();
 		entry.Wait(B_CAN_INTERRUPT);
+
+		TRACE("IORequestQueue(%p)::Dequeue(): Waking up\n", this);
 	}
 
 	return NULL;
@@ -116,16 +192,16 @@ void IOOperationPool::Stop() {
 
 IOOperation* IOOperationPool::GetFreeOperation() {
 	while (!fTerminating) {
-		{
-			MutexLocker _(fLock);
-			IOOperation *operation = fUnusedOperations.RemoveHead();
-			if (operation != NULL) {
-				return operation;
-			}
+		MutexLocker locker(fLock);
+		IOOperation *operation = fUnusedOperations.RemoveHead();
+		if (operation != NULL) {
+			return operation;
 		}
 
 		ConditionVariableEntry entry;
 		fNewOperationAvailableCondition.Add(&entry);
+
+		locker.Unlock();
 		entry.Wait(B_CAN_INTERRUPT);
 	}
 
@@ -154,9 +230,8 @@ IOSchedulerStupid::IOSchedulerStupid(DMAResource *resource)
 		: IOScheduler(resource),
 		  fTerminating(false),
 		  fBlockSize(512),
-		  fDelayedRequestQueue("delayed requests"),
+		  fCpuCount(smp_get_num_cpus()),
 		  fNotifierQueue("finished requests"),
-		  fDelayedRequestThread(-1),
 		  fNotifierThread(-1)
 {
 }
@@ -164,15 +239,14 @@ IOSchedulerStupid::IOSchedulerStupid(DMAResource *resource)
 IOSchedulerStupid::~IOSchedulerStupid() {
 	fTerminating = true;
 
+	for (generic_size_t i = 0; i < fCpuCount; ++i) {
+		fIOSchedulerShards[i].Stop();
+	}
+	delete[] fIOSchedulerShards;
+
 	fOperationPool.Stop();
 
-	fDelayedRequestQueue.Stop();
-
 	fNotifierQueue.Stop();
-
-	if (fDelayedRequestThread >= 0) {
-		wait_for_thread(fDelayedRequestThread, NULL);
-	}
 
 	if (fNotifierThread >= 0) {
 		wait_for_thread(fNotifierThread, NULL);
@@ -186,6 +260,20 @@ status_t IOSchedulerStupid::Init(const char *name) {
 
 	TRACE("%p->IOSchedulerStupid::Init(%s)\n", this, name);
 
+	fIOSchedulerShards = new(std::nothrow) IOSchedulerShard[fCpuCount];
+	if (fIOSchedulerShards == NULL) {
+		return B_NO_MEMORY;
+	}
+
+	for (generic_size_t i = 0; i < fCpuCount; ++i) {
+		TRACE("%p->IOSchedulerStupid::Init(%s): Initializing shard %ld\n", this, name, i);
+		status_t result = fIOSchedulerShards[i].Init(name, this, fID, i);
+		if (result != B_OK) {
+			delete[] fIOSchedulerShards;
+			return result;
+		}
+	}
+
 	size_t concurrent_buffer_count = 16;
 
 	if (fDMAResource != NULL) {
@@ -198,15 +286,14 @@ status_t IOSchedulerStupid::Init(const char *name) {
 		return init_result;
 	}
 
-	init_result = fDelayedRequestQueue.Init();
+	init_result = fNotifierQueue.Init();
 	if (init_result != B_OK) {
 		return init_result;
 	}
 
-	// FIXME: Should this be hard-coded to 512? It's set to 2KiB when formatting.
-	// It should probably be probed. Linux system says 4096.
 	if (fBlockSize == 0) {
 		fBlockSize = 512;
+		TRACE("%p->IOSchedulerStupid::Init(%s) Overriding block_size to %ld since it wasn't provided by the DMAResource\n", this, name, fBlockSize);
 	}
 
 	// Start notifier thread
@@ -220,19 +307,11 @@ status_t IOSchedulerStupid::Init(const char *name) {
 		if (fNotifierThread < B_OK) {
 			return fNotifierThread;
 		}
-
-		strlcpy(buffer, name, sizeof(buffer));
-		strlcat(buffer, " scheduler delayed request handler ", sizeof(buffer));
-		nameLength = strlen(buffer);
-		snprintf(buffer + nameLength, sizeof(buffer) - nameLength, "%" B_PRId32, fID);
-		fDelayedRequestThread = spawn_kernel_thread(&_DelayedRequestThread, buffer, B_NORMAL_PRIORITY + 2, reinterpret_cast<void*>(this));
-		if (fDelayedRequestThread < B_OK) {
-			return fDelayedRequestThread;
-		}
 	}
 
 	resume_thread(fNotifierThread);
-	resume_thread(fDelayedRequestThread);
+
+	TRACE("%p->IOSchedulerStupid::Init(%s) Initialization complete\n", this, name);
 
 	return B_OK;
 }
@@ -245,12 +324,13 @@ status_t IOSchedulerStupid::ScheduleRequest(IORequest *request) {
 	TRACE("%p->IOSchedulerStupid::ScheduleRequest(%p) request scheduled\n", this,
 		  request);
 
+	// This is the experimental option.
 	IOOperation *operation = NULL;
 	if (request->HasCallbacks()) {
 		operation = fOperationPool.GetFreeOperationNonBlocking();
 		if (operation == NULL) {
 			TRACE("%p->IOSchedulerStupid::ScheduleRequest(%p) Request has callbacks and operation pool is empty. Enqueuing request for later.", this, request);
-			fDelayedRequestQueue.Enqueue(request);
+			fIOSchedulerShards[smp_get_current_cpu()].Submit(request);
 			return B_OK;
 		}
 	} else {
@@ -260,7 +340,10 @@ status_t IOSchedulerStupid::ScheduleRequest(IORequest *request) {
 		operation = fOperationPool.GetFreeOperation();
 	}
 
-	_SubmitRequest(request, operation);
+	SubmitRequest(request, operation);
+
+	// This is the safe option
+	//fIOSchedulerShards[smp_get_current_cpu()].Submit(request);
 
 	return B_OK;
 }
@@ -297,21 +380,21 @@ void IOSchedulerStupid::OperationCompleted(IOOperation *operation,
 	{
 		bool operationFinished = operation->Finish();
 
-		TRACE("%p->IOSchedulerStupid::_Finisher(): Operation %p finished? %d\n",
+		TRACE("%p->IOSchedulerStupid::OperationCompleted(): Operation %p finished? %d\n",
 			  this, operation, operationFinished);
 
 		IOSchedulerRoster::Default()->Notify(IO_SCHEDULER_OPERATION_FINISHED,
 											 this,
 											 request, operation);
 
-		TRACE("%p->IOSchedulerStupid::_Finisher(): Operation %p notified to roster\n",
+		TRACE("%p->IOSchedulerStupid::OperationCompleted(): Operation %p notified to roster\n",
 			  this, operation);
 
 		// Notify for every time the operation is passed to the I/O hook,
 		// not only when it is fully finished.
 
 		if (!operationFinished) {
-			TRACE("%p->IOSchedulerStupid::_Finisher(): Operation: %p not finished yet\n",
+			TRACE("%p->IOSchedulerStupid::OperationCompleted(): Operation: %p not finished yet\n",
 				  this, operation);
 			operation->SetTransferredBytes(0);
 			// FIXME: Schedule for retry
@@ -322,7 +405,7 @@ void IOSchedulerStupid::OperationCompleted(IOOperation *operation,
 		}
 	
 		// notify request and remove operation
-		TRACE("%p->IOSchedulerStupid::_Finisher(): Request %p from operation %p\n",
+		TRACE("%p->IOSchedulerStupid::OperationCompleted(): Request %p from operation %p\n",
 			  this, request, operation);
 
 		generic_size_t operationOffset =
@@ -334,7 +417,7 @@ void IOSchedulerStupid::OperationCompleted(IOOperation *operation,
 				? operationOffset + operation->OriginalLength()
 				: operationOffset);
 
-		TRACE("%p->IOSchedulerStupid::_Finisher(): operation %p finished, recycling buffer\n",
+		TRACE("%p->IOSchedulerStupid::OperationCompleted(): operation %p finished, recycling buffer\n",
 			  this, operation);
 		if (fDMAResource != NULL) {
 			fDMAResource->RecycleBuffer(operation->Buffer());
@@ -344,29 +427,29 @@ void IOSchedulerStupid::OperationCompleted(IOOperation *operation,
 
 		// If the request is done, we need to perform its notifications.
 		if (request->IsFinished()) {
-			TRACE("%p->IOSchedulerStupid::_Finisher(): request %p is finished\n",
+			TRACE("%p->IOSchedulerStupid::OperationCompleted(): request %p is finished\n",
 				  this, request);
 			if (request->Status() == B_OK && request->RemainingBytes() > 0) {
 				// The request has been processed OK so far, but it isn't really
 				// finished yet.
-				TRACE("%p->IOSchedulerStupid::_Finisher(): Setting request %p as unfinished cause remaining bytes is %ld\n",
+				TRACE("%p->IOSchedulerStupid::OperationCompleted(): Setting request %p as unfinished cause remaining bytes is %ld\n",
 					  this, request, request->RemainingBytes());
 				request->SetUnfinished();
-				fDelayedRequestQueue.Enqueue(request);
+				fIOSchedulerShards[smp_get_current_cpu()].Submit(request);
 			} else {
 				if (request->HasCallbacks()) {
-					TRACE("%p->IOSchedulerStupid::_Finisher(): request %p has callbacks, enqueuing for notifier thread\n",
+					TRACE("%p->IOSchedulerStupid::OperationCompleted(): request %p has callbacks, enqueuing for notifier thread\n",
 						  this, request);
 					// The request has callbacks that may take some time to
 					// perform, so we hand it over to the request notifier.
 					fNotifierQueue.Enqueue(request);
 				} else {
-					TRACE("%p->IOSchedulerStupid::_Finisher(): request %p has no callbacks. Notifying now.\n",
+					TRACE("%p->IOSchedulerStupid::OperationCompleted(): request %p has no callbacks. Notifying now.\n",
 						  this, request);
 					IOSchedulerRoster::Default()->Notify(IO_SCHEDULER_REQUEST_FINISHED,	this, request);
 					request->NotifyFinished();
 
-					TRACE("%p->IOSchedulerStupid::_Finisher(): request %p notified\n",
+					TRACE("%p->IOSchedulerStupid::OperationCompleted(): request %p notified\n",
 						  this, request);
 				}
 			}
@@ -379,8 +462,10 @@ void IOSchedulerStupid::Dump() const {
 	kprintf("  DMA resource:   %p\n", fDMAResource);
 	kprintf("  fBlockSize: %ld\n", fBlockSize);
 	fOperationPool.Dump();
-	fDelayedRequestQueue.Dump();
 	fNotifierQueue.Dump();
+	for (generic_size_t i = 0; i < fCpuCount; ++i) {
+		fIOSchedulerShards[i].Dump();
+	}
 }
 
 /*static*/ status_t IOSchedulerStupid::_NotifierThread(void *self) {
@@ -411,29 +496,12 @@ status_t IOSchedulerStupid::_Notifier() {
 	return B_OK;
 }
 
-/*static*/ status_t IOSchedulerStupid::_DelayedRequestThread(void *self) {
-	return reinterpret_cast<IOSchedulerStupid*>(self)->_DelayedRequests();
+void IOSchedulerStupid::SubmitRequest(IORequest *request) {
+	IOOperation *operation = fOperationPool.GetFreeOperation();
+	SubmitRequest(request, operation);
 }
 
-status_t IOSchedulerStupid::_DelayedRequests() {
-	TRACE("%p->IOSchedulerStupid::_DelayedRequests(): starting delayed request processing thread\n",
-		  this);
-
-	while (true) {
-		IORequest *request = fDelayedRequestQueue.Dequeue();
-		if (request == NULL && fTerminating) {
-			break;
-		}
-
-		IOOperation *operation = fOperationPool.GetFreeOperation();
-
-		_SubmitRequest(request, operation);
-	}
-
-	return B_OK;
-}
-
-void IOSchedulerStupid::_SubmitRequest(IORequest *request, IOOperation *operation) {
+void IOSchedulerStupid::SubmitRequest(IORequest *request, IOOperation *operation) {
 	// Code from _Scheduler thread.
 	if (fDMAResource != NULL) {
 		generic_size_t max_operation_length = fBlockSize * 1024;
