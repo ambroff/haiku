@@ -63,6 +63,8 @@ public:
 	virtual	void				SetDeviceCapacity(off_t deviceCapacity);
 	virtual void				MediaChanged();
 
+	virtual void				SubmitRequest(IORequest *request) = 0;
+
 	virtual	status_t			ScheduleRequest(IORequest* request) = 0;
 
 	virtual	void				AbortRequest(IORequest* request,

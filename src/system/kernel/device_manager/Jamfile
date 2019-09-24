@@ -20,9 +20,7 @@ KernelMergeObject kernel_device_manager.o :
 	IOScheduler.cpp
 	IOSchedulerRoster.cpp
 	IOSchedulerSimple.cpp
-	IOSchedulerNoop.cpp
 	IOSchedulerStupid.cpp
-	IOSchedulerNoopMultiQueue.cpp
 	:
 	$(TARGET_KERNEL_PIC_CCFLAGS)
 ;

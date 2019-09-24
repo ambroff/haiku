@@ -777,9 +777,7 @@ cd_read(void* cookie, off_t pos, void* buffer, size_t* _length)
 	if (handle->info->io_scheduler == NULL)
 		return B_DEV_NO_MEDIA;
 
-	status = handle->info->io_scheduler->ScheduleRequest(&request);
-	if (status != B_OK)
-		return status;
+	handle->info->io_scheduler->SubmitRequest(&request);
 
 	status = request.Wait(0, 0);
 	if (status == B_OK)
@@ -808,9 +806,7 @@ cd_write(void* cookie, off_t pos, const void* buffer, size_t* _length)
 	if (handle->info->io_scheduler == NULL)
 		return B_DEV_NO_MEDIA;
 
-	status = handle->info->io_scheduler->ScheduleRequest(&request);
-	if (status != B_OK)
-		return status;
+	handle->info->io_scheduler->SubmitRequest(&request);
 
 	status = request.Wait(0, 0);
 	if (status == B_OK)

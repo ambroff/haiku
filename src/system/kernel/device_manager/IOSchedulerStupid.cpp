@@ -28,7 +28,7 @@ IOSchedulerShard::IOSchedulerShard()
 {
 }
 
-status_t IOSchedulerShard::Init(const char *name, IOSchedulerDelegate *scheduler, int32 scheduler_id, int32 shard_id) {
+status_t IOSchedulerShard::Init(const char *name, IOScheduler *scheduler, int32 scheduler_id, int32 shard_id) {
 	fScheduler = scheduler;
 	fSchedulerId = scheduler_id;
 	fShardId = shard_id;
@@ -324,26 +324,7 @@ status_t IOSchedulerStupid::ScheduleRequest(IORequest *request) {
 	TRACE("%p->IOSchedulerStupid::ScheduleRequest(%p) request scheduled\n", this,
 		  request);
 
-	// This is the experimental option.
-	IOOperation *operation = NULL;
-	if (request->HasCallbacks()) {
-		operation = fOperationPool.GetFreeOperationNonBlocking();
-		if (operation == NULL) {
-			TRACE("%p->IOSchedulerStupid::ScheduleRequest(%p) Request has callbacks and operation pool is empty. Enqueuing request for later.", this, request);
-			fIOSchedulerShards[smp_get_current_cpu()].Submit(request);
-			return B_OK;
-		}
-	} else {
-		// It's assumed that it's OK to block this thread.
-		// FIXME: What we really need is a ScheduleRequest() that is explicitly not async since we have
-		// many callsights which call ScheduleRequest() and then immediately call request->Wait();
-		operation = fOperationPool.GetFreeOperation();
-	}
-
-	SubmitRequest(request, operation);
-
-	// This is the safe option
-	//fIOSchedulerShards[smp_get_current_cpu()].Submit(request);
+	fIOSchedulerShards[smp_get_current_cpu()].Submit(request);
 
 	return B_OK;
 }

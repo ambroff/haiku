@@ -66,13 +66,6 @@ private:
 	ConditionVariable fNewRequestCondition;
 };
 
-class IOSchedulerDelegate {
-public:
-	virtual ~IOSchedulerDelegate() = default;
-
-	virtual void SubmitRequest(IORequest *request) = 0;
-};
-
 class IOSchedulerShard {
 public:
 	IOSchedulerShard();
@@ -80,7 +73,7 @@ public:
 	IOSchedulerShard(const IOSchedulerShard& rhs) = delete;
 
 	status_t Init(const char *name,
-				  IOSchedulerDelegate *scheduler,
+				  IOScheduler *scheduler,
 				  int32 scheduler_id,
 				  int32 shard_id);
 
@@ -91,7 +84,7 @@ public:
 	void Dump() const;
 
 private:
-	IOSchedulerDelegate *fScheduler;
+	IOScheduler *fScheduler;
 	int32 fSchedulerId;
 	int32 fShardId;
 	volatile bool fTerminating;
@@ -104,7 +97,7 @@ private:
 	static status_t _MainloopThread(void *self);
 };
 
-class IOSchedulerStupid : public IOScheduler, public IOSchedulerDelegate {
+class IOSchedulerStupid : public IOScheduler {
 public:
 	IOSchedulerStupid(DMAResource *resource);
 
@@ -122,7 +115,7 @@ public:
 	virtual void Dump() const;
 
 	virtual void SubmitRequest(IORequest *request);
-	virtual void SubmitRequest(IORequest *request, IOOperation *operation);
+	void SubmitRequest(IORequest *request, IOOperation *operation);
 
 private:
 	volatile bool fTerminating;
