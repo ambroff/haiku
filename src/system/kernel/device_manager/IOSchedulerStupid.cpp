@@ -512,7 +512,7 @@ void IOSchedulerStupid::SubmitRequest(IORequest *request, IOOperation *operation
 				max_operation_length);
 
 		IOBuffer *buffer = request->Buffer();
-		if (buffer->IsVirtual()) {
+		if (!buffer->IsMemoryLocked() && buffer->IsVirtual()) {
 			status_t status = buffer->LockMemory(request->TeamID(),
 												 request->IsWrite());
 			if (status != B_OK) {
