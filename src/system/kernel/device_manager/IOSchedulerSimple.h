@@ -24,6 +24,8 @@ public:
 
 	virtual	status_t			Init(const char* name);
 
+	virtual status_t			SubmitRequest(IORequest *request);
+
 	virtual	status_t			ScheduleRequest(IORequest* request);
 
 	virtual	void				AbortRequest(IORequest* request,

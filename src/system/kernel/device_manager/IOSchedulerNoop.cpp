@@ -230,9 +230,7 @@ IOSchedulerNoop::IOSchedulerNoop(DMAResource *resource)
 		: IOScheduler(resource),
 		  fTerminating(false),
 		  fBlockSize(512),
-		  fCpuCount(smp_get_num_cpus()),
-		  fNotifierQueue("finished requests"),
-		  fNotifierThread(-1)
+		  fCpuCount(smp_get_num_cpus())
 {
 }
 
@@ -245,12 +243,6 @@ IOSchedulerNoop::~IOSchedulerNoop() {
 	delete[] fIOSchedulerShards;
 
 	fOperationPool.Stop();
-
-	fNotifierQueue.Stop();
-
-	if (fNotifierThread >= 0) {
-		wait_for_thread(fNotifierThread, NULL);
-	}
 }
 
 status_t IOSchedulerNoop::Init(const char *name) {
@@ -286,30 +278,10 @@ status_t IOSchedulerNoop::Init(const char *name) {
 		return init_result;
 	}
 
-	init_result = fNotifierQueue.Init();
-	if (init_result != B_OK) {
-		return init_result;
-	}
-
 	if (fBlockSize == 0) {
 		fBlockSize = 512;
 		TRACE("%p->IOSchedulerNoop::Init(%s) Overriding block_size to %ld since it wasn't provided by the DMAResource\n", this, name, fBlockSize);
 	}
-
-	// Start notifier thread
-	{
-		char buffer[B_OS_NAME_LENGTH];
-		strlcpy(buffer, name, sizeof(buffer));
-		strlcat(buffer, " scheduler notifier ", sizeof(buffer));
-		size_t nameLength = strlen(buffer);
-		snprintf(buffer + nameLength, sizeof(buffer) - nameLength, "%" B_PRId32, fID);
-		fNotifierThread = spawn_kernel_thread(&_NotifierThread, buffer, B_NORMAL_PRIORITY + 2, reinterpret_cast<void*>(this));
-		if (fNotifierThread < B_OK) {
-			return fNotifierThread;
-		}
-	}
-
-	resume_thread(fNotifierThread);
 
 	TRACE("%p->IOSchedulerNoop::Init(%s) Initialization complete\n", this, name);
 
@@ -424,21 +396,21 @@ void IOSchedulerNoop::OperationCompleted(IOOperation *operation,
 				request->SetUnfinished();
 				fIOSchedulerShards[smp_get_current_cpu()].Submit(request);
 			} else {
-				if (request->HasCallbacks()) {
-					TRACE("%p->IOSchedulerNoop::OperationCompleted(): request %p has callbacks, enqueuing for notifier thread\n",
-						  this, request);
-					// The request has callbacks that may take some time to
-					// perform, so we hand it over to the request notifier.
-					fNotifierQueue.Enqueue(request);
-				} else {
-					TRACE("%p->IOSchedulerNoop::OperationCompleted(): request %p has no callbacks. Notifying now.\n",
-						  this, request);
-					IOSchedulerRoster::Default()->Notify(IO_SCHEDULER_REQUEST_FINISHED,	this, request);
-					request->NotifyFinished();
-
-					TRACE("%p->IOSchedulerNoop::OperationCompleted(): request %p notified\n",
-						  this, request);
-				}
+				// The callbacks invoked in IORequest::NotifyFinished() could be costly, and IOSchedulerSimple
+				// tries not to execute those in the scheduler thread if IORequest::HasCallbacks() returns
+				// true. However, in this scheduler we have multiple scheduler threads and queues, and not
+				// all requests even use them, so it's likely fine to just invoke them directly here. We avoid
+				// a context switch and additional queueing latency by doing this.
+				//
+				// The bonus is that, for IORequests sent with IOSchedulerNoop::SubmitRequest(IORequest*),
+				// there is zero thread hopping by invoking them directly here. The caller is blocking on the
+				// IORequest anyway.
+				TRACE("%p->IOSchedulerNoop::OperationCompleted(): Notifying request %s now.\n",
+					  this, request);
+				IOSchedulerRoster::Default()->Notify(IO_SCHEDULER_REQUEST_FINISHED,	this, request);
+				request->NotifyFinished();
+				TRACE("%p->IOSchedulerNoop::OperationCompleted(): request %p notified\n",
+					  this, request);
 			}
 		}
 	}
@@ -449,46 +421,28 @@ void IOSchedulerNoop::Dump() const {
 	kprintf("  DMA resource:   %p\n", fDMAResource);
 	kprintf("  fBlockSize: %ld\n", fBlockSize);
 	fOperationPool.Dump();
-	fNotifierQueue.Dump();
 	for (generic_size_t i = 0; i < fCpuCount; ++i) {
 		fIOSchedulerShards[i].Dump();
 	}
 }
 
-/*static*/ status_t IOSchedulerNoop::_NotifierThread(void *self) {
-	return reinterpret_cast<IOSchedulerNoop*>(self)->_Notifier();
-}
+status_t IOSchedulerNoop::SubmitRequest(IORequest *request) {
+	IOOperation *operation = fOperationPool.GetFreeOperation();
 
-status_t IOSchedulerNoop::_Notifier() {
-	TRACE("%p->IOSchedulerNoop::_Notifier(): starting request notifier thread\n",
-		  this);
+#ifdef TRACE_IO_SCHEDULER
+	status_t status = _SubmitRequest(request, operation);
+	TRACE("%p->IOSchedulerNoop::SubmitRequest(%p): Status of request: %d\n", status);
+#else
+	_SubmitRequest(request, operation);
+#endif
 
-	while (true) {
-		TRACE("%p->IOSchedulerNoop::_Notifier(): Waiting for next finished request to notify\n", this);
-		IORequest *request = fNotifierQueue.Dequeue();
-		if (request == NULL && fTerminating) {
-			break;
-		}
-
-		IOSchedulerRoster::Default()->Notify(IO_SCHEDULER_REQUEST_FINISHED,
-											 this,
-											 request);
-
-		// notify the request
-		TRACE("%p->IOSchedulerNoop::_Notifier(): Calling NotifyFinish() for request %p\n",
-			  this, request);
-		request->NotifyFinished();
-	}
-
+	// Returning the status of the I/O request here breaks the contract of IOScheduler. The status returned
+	// above will also be available in the Request object anyway. So return B_OK to signify that this request
+	// has been submitted successfully, and the caller will get the actual status from the IORequest.
 	return B_OK;
 }
 
-void IOSchedulerNoop::SubmitRequest(IORequest *request) {
-	IOOperation *operation = fOperationPool.GetFreeOperation();
-	SubmitRequest(request, operation);
-}
-
-void IOSchedulerNoop::SubmitRequest(IORequest *request, IOOperation *operation) {
+status_t IOSchedulerNoop::_SubmitRequest(IORequest *request, IOOperation *operation) {
 	// Code from _Scheduler thread.
 	if (fDMAResource != NULL) {
 		generic_size_t max_operation_length = fBlockSize * 1024;
@@ -507,7 +461,7 @@ void IOSchedulerNoop::SubmitRequest(IORequest *request, IOOperation *operation) 
 					  this, request, status);
 				fOperationPool.ReleaseIOOperation(operation);
 				request->SetStatusAndNotify(status);
-				return; // Used to be return `status`
+				return status;
 			}
 		}
 
@@ -526,7 +480,7 @@ void IOSchedulerNoop::SubmitRequest(IORequest *request, IOOperation *operation) 
 			}
 
 			AbortRequest(request, status);
-			return; // used to be `return status;`
+			return status;
 		}
 
 		IOSchedulerRoster::Default()->Notify(IO_SCHEDULER_OPERATION_STARTED,
@@ -540,7 +494,7 @@ void IOSchedulerNoop::SubmitRequest(IORequest *request, IOOperation *operation) 
 		if (status != B_OK) {
 			fOperationPool.ReleaseIOOperation(operation);
 			AbortRequest(request, status);
-			return; // Used to be `return true;`
+			return status;
 		}
 
 		operation->SetOriginalRange(request->Offset(), request->Length());
@@ -553,4 +507,6 @@ void IOSchedulerNoop::SubmitRequest(IORequest *request, IOOperation *operation) 
 
 	TRACE("%p->IOSchedulerNoop::SubmitRequest(%p): Invoking fIOCallback for operation %p.\n", this, request, operation);
 	fIOCallback(fIOCallbackData, operation);
+
+	return B_OK;
 }

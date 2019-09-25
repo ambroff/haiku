@@ -63,8 +63,13 @@ public:
 	virtual	void				SetDeviceCapacity(off_t deviceCapacity);
 	virtual void				MediaChanged();
 
-	virtual void				SubmitRequest(IORequest *request) = 0;
+	// Submit the IORequest directly to the device with as little
+	// queuing as possible. This is appropriate if it is OK to block
+	// the thread submitting this request.
+	virtual status_t			SubmitRequest(IORequest *request) = 0;
 
+	// Schedule the request for submission to the I/O device. This is
+	// appropriate if it is not OK to block on this request.
 	virtual	status_t			ScheduleRequest(IORequest* request) = 0;
 
 	virtual	void				AbortRequest(IORequest* request,

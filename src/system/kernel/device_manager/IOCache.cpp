@@ -153,8 +153,8 @@ IOCache::MediaChanged()
 	}
 }
 
-void IOCache::SubmitRequest(IORequest *request) {
-	ScheduleRequest(request);
+status_t IOCache::SubmitRequest(IORequest *request) {
+	return ScheduleRequest(request);
 }
 
 status_t

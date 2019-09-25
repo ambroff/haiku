@@ -105,6 +105,8 @@ public:
 
 	virtual status_t Init(const char *name);
 
+	virtual status_t SubmitRequest(IORequest *request);
+
 	virtual status_t ScheduleRequest(IORequest *request);
 
 	virtual void AbortRequest(IORequest *request, status_t status = B_CANCELED);
@@ -113,9 +115,6 @@ public:
 									generic_size_t transferredBytes);
 
 	virtual void Dump() const;
-
-	virtual void SubmitRequest(IORequest *request);
-	void SubmitRequest(IORequest *request, IOOperation *operation);
 
 private:
 	volatile bool fTerminating;
@@ -127,10 +126,7 @@ private:
 	generic_size_t fCpuCount;
 	IOSchedulerShard *fIOSchedulerShards;
 
-	IORequestQueue fNotifierQueue;
-	thread_id fNotifierThread;
-	static status_t _NotifierThread(void *self);
-	status_t _Notifier();
+	status_t _SubmitRequest(IORequest *request, IOOperation *operation);
 };
 
 #endif // IO_SCHEDULER_NOOP_H

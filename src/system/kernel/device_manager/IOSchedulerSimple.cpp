@@ -200,6 +200,13 @@ IOSchedulerSimple::Init(const char* name)
 	return B_OK;
 }
 
+status_t
+IOSchedulerSimple::SubmitRequest(IORequest *request)
+{
+	// We can't directly submit the request to the driver in this scheduler.
+	// All requests must go to the request queue.
+	return ScheduleRequest(request);
+}
 
 status_t
 IOSchedulerSimple::ScheduleRequest(IORequest* request)
