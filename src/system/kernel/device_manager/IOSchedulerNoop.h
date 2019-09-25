@@ -34,7 +34,7 @@ private:
 	// FIXME: Following the pattern of using volatile, but is it even correct?
 	// It should probably use atomic primitives instead.
 	volatile bool fTerminating;
-	mutex fLock;
+	spinlock fLock;
 	IOOperationList fUnusedOperations;
 	ConditionVariable fNewOperationAvailableCondition;
 };
@@ -62,7 +62,7 @@ private:
 	volatile bool fTerminating;
 	const char *fQueueName;
 	IORequestList fQueue;
-	mutex fLock;
+	spinlock fLock;
 	ConditionVariable fNewRequestCondition;
 };
 

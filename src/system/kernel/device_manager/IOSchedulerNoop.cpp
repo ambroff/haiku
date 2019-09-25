@@ -93,15 +93,11 @@ IORequestQueue::IORequestQueue(const char *queue_name)
 	: fTerminating(false),
 	  fQueueName(queue_name)
 {
-	// FIXME: should have a unique names here for different queues
-	mutex_init(&fLock, "I/O scheduler IORequest queue");
+	B_INITIALIZE_SPINLOCK(&fLock);
 	fNewRequestCondition.Init(this, "I/O scheduler request queue new request available");
 }
 
 IORequestQueue::~IORequestQueue() {
-	mutex_lock(&fLock);
-	mutex_destroy(&fLock);
-
 	if (fQueue.Count() > 0) {
 		panic("IOScheduler deallocated before request queue was drained!");
 	}
@@ -112,20 +108,21 @@ status_t IORequestQueue::Init() {
 }
 
 void IORequestQueue::Stop() {
+	InterruptsSpinLocker _(fLock);
 	fTerminating = true;
 	fNewRequestCondition.NotifyAll();
 }
 
 void IORequestQueue::Enqueue(IORequest *request) {
 	TRACE("IORequestQueue(%p)::Enqueue(%p)\n", this, request);
-	MutexLocker _(fLock);
+	InterruptsSpinLocker _(fLock);
 	fQueue.Add(request);
 	fNewRequestCondition.NotifyAll();
 }
 
 IORequest* IORequestQueue::Dequeue() {
 	while (true) {
-		MutexLocker locker(fLock);
+		InterruptsSpinLocker locker(fLock);
 
 		IORequest *request = fQueue.RemoveHead();
 		if (request != NULL) {
@@ -159,14 +156,11 @@ void IORequestQueue::Dump() const {
 IOOperationPool::IOOperationPool()
 	: fTerminating(false)
 {
-	mutex_init(&fLock, "I/O scheduler IOOperation pool");
+	B_INITIALIZE_SPINLOCK(&fLock);
 	fNewOperationAvailableCondition.Init(this, "I/O schedule IOOperation pool new available");
 }
 
 IOOperationPool::~IOOperationPool() {
-	mutex_lock(&fLock);
-	mutex_destroy(&fLock);
-
 	while (IOOperation *operation = fUnusedOperations.RemoveHead()) {
 		delete operation;
 	}
@@ -186,13 +180,14 @@ status_t IOOperationPool::Init(generic_size_t size) {
 }
 
 void IOOperationPool::Stop() {
+	InterruptsSpinLocker _(fLock);
 	fTerminating = true;
 	fNewOperationAvailableCondition.NotifyAll();
 }
 
 IOOperation* IOOperationPool::GetFreeOperation() {
 	while (!fTerminating) {
-		MutexLocker locker(fLock);
+		InterruptsSpinLocker locker(fLock);
 		IOOperation *operation = fUnusedOperations.RemoveHead();
 		if (operation != NULL) {
 			return operation;
@@ -209,13 +204,13 @@ IOOperation* IOOperationPool::GetFreeOperation() {
 }
 
 IOOperation* IOOperationPool::GetFreeOperationNonBlocking() {
-	MutexLocker _(fLock);
+	InterruptsSpinLocker _(fLock);
 	return fUnusedOperations.RemoveHead();
 }
 
 void IOOperationPool::ReleaseIOOperation(IOOperation *operation) {
 	operation->SetParent(NULL);
-	MutexLocker _(fLock);
+	InterruptsSpinLocker _(fLock);
 	fUnusedOperations.Add(operation);
 	fNewOperationAvailableCondition.NotifyAll();
 }
