@@ -400,7 +400,7 @@ void IOSchedulerNoop::OperationCompleted(IOOperation *operation,
 				// The bonus is that, for IORequests sent with IOSchedulerNoop::SubmitRequest(IORequest*),
 				// there is zero thread hopping by invoking them directly here. The caller is blocking on the
 				// IORequest anyway.
-				TRACE("%p->IOSchedulerNoop::OperationCompleted(): Notifying request %s now.\n",
+				TRACE("%p->IOSchedulerNoop::OperationCompleted(): Notifying request %p now.\n",
 					  this, request);
 				IOSchedulerRoster::Default()->Notify(IO_SCHEDULER_REQUEST_FINISHED,	this, request);
 				request->NotifyFinished();
@@ -426,7 +426,7 @@ status_t IOSchedulerNoop::SubmitRequest(IORequest *request) {
 
 #ifdef TRACE_IO_SCHEDULER
 	status_t status = _SubmitRequest(request, operation);
-	TRACE("%p->IOSchedulerNoop::SubmitRequest(%p): Status of request: %d\n", status);
+	TRACE("%p->IOSchedulerNoop::SubmitRequest(%p): Status of request: %d\n", this, request, status);
 #else
 	_SubmitRequest(request, operation);
 #endif
