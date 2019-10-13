@@ -30,7 +30,7 @@ static const char*
 getHaikuFirmwareName(const char* fbsdFirmwareName,
 	const char* unknownFirmwareName)
 {
-	int i;
+	uint i;
 
 	if (__haiku_firmware_name_map == NULL)
 		return unknownFirmwareName;
@@ -61,6 +61,9 @@ firmware_get(const char* fbsdFirmwareName)
 
 	haikuFirmwareName = getHaikuFirmwareName(fbsdFirmwareName,
 		fbsdFirmwareName);
+	dprintf("Driver loading firmware `%s', which has actual filename `%s'\n",
+			fbsdFirmwareName,
+			haikuFirmwareName);
 
 	firmwarePath = (char*)malloc(B_PATH_NAME_LENGTH);
 	if (firmwarePath == NULL)
@@ -83,12 +86,20 @@ firmware_get(const char* fbsdFirmwareName)
 			break;
 	}
 
-	if (fileDescriptor < 0)
+	dprintf("Actual firmware path: %s\n", firmwarePath);
+
+	if (fileDescriptor < 0) {
+		dprintf("Could not load firmware file, got result %d\n", fileDescriptor);
 		goto cleanup;
+	}
+
+	dprintf("Openned firmware file %s with file descriptor %d\n", firmwarePath, fileDescriptor);
 
 	firmwareFileSize = lseek(fileDescriptor, 0, SEEK_END);
-	if (firmwareFileSize == -1)
+	if (firmwareFileSize == -1) {
+		dprintf("lseek of firmwrae file descriptor %d failed: %d\n", fileDescriptor, firmwareFileSize);
 		goto cleanup;
+	}
 
 	lseek(fileDescriptor, 0, SEEK_SET);
 
@@ -107,6 +118,7 @@ firmware_get(const char* fbsdFirmwareName)
 
 	readCount = read(fileDescriptor, (void*)firmware->data, firmwareFileSize);
 	if (readCount == -1 || readCount < firmwareFileSize) {
+		dprintf("Read of firmware file fd=%d failed: %ld\n", fileDescriptor, readCount);
 		free((void*)firmware->data);
 		goto cleanup;
 	}
