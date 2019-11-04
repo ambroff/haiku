@@ -91,7 +91,6 @@ private:
 
 // #pragma mark - PackagesDirectory
 
-
 struct Volume::PackagesDirectory {
 public:
 	PackagesDirectory()
@@ -106,17 +105,21 @@ public:
 		fNodeRef = nodeRef;
 
 		if (isPackagesDir)
-			return;
+            return;
 
 		BDirectory directory;
 		BEntry entry;
-		if (directory.SetTo(&fNodeRef) == B_OK
-			&& directory.GetEntry(&entry) == B_OK) {
+		if (directory.SetTo(&fNodeRef) == B_OK &&
+			directory.GetEntry(&entry) == B_OK) {
 			fName = entry.Name();
 		}
 
 		if (fName.IsEmpty())
 			fName = "unknown state";
+
+		KWA_PRINT("Initializing package directory nodeRef.device=%d, "
+				  "nodeRef.inode=%ld, isPackagesDir=%d, name=%s\n",
+				  nodeRef.device, nodeRef.node, isPackagesDir, fName.String());
 	}
 
 	const node_ref& NodeRef() const
@@ -219,6 +222,8 @@ Volume::Init(const node_ref& rootDirectoryRef, node_ref& _packageRootRef)
 	if (error == B_OK)
 		error = entry.GetPath(&path);
 
+	KWA_PRINT("Initializing volume with path %s\n", path.Path());
+
 	if (error != B_OK) {
 		ERROR("Volume::Init(): failed to get root directory path: %s\n",
 			strerror(error));
@@ -261,6 +266,7 @@ Volume::Init(const node_ref& rootDirectoryRef, node_ref& _packageRootRef)
 		if (info->packagesDirectoryCount <= maxPackagesDirCount)
 			break;
 
+		// KWA TODO: What is going on here exactly? Why is this a max when it just gets clobbered?
 		maxPackagesDirCount = info->packagesDirectoryCount;
 		infoDeleter.Unset();
 	}
@@ -280,6 +286,7 @@ Volume::Init(const node_ref& rootDirectoryRef, node_ref& _packageRootRef)
 	fPackagesDirectoryCount = info->packagesDirectoryCount;
 
 	for (uint32 i = 0; i < info->packagesDirectoryCount; i++) {
+		KWA_PRINT("Initializing package directory %d\n", i);
 		fPackagesDirectories[i].Init(
 			node_ref(info->packagesDirectoryInfos[i].deviceID,
 				info->packagesDirectoryInfos[i].nodeID),
@@ -289,6 +296,10 @@ Volume::Init(const node_ref& rootDirectoryRef, node_ref& _packageRootRef)
 	_packageRootRef.device = info->rootDeviceID;
 	_packageRootRef.node = info->rootDirectoryID;
 
+	KWA_PRINT("Initialization complete for %s with %d package directories.\n",
+			  fPath.String(),
+			  fPackagesDirectoryCount);
+	
 	return B_OK;
 }
 
@@ -296,6 +307,8 @@ Volume::Init(const node_ref& rootDirectoryRef, node_ref& _packageRootRef)
 status_t
 Volume::InitPackages(Listener* listener)
 {
+	KWA_PRINT("Initializing packages with new listener\n");
+
 	// node-monitor the volume's packages directory
 	status_t error = watch_node(&PackagesDirectoryRef(), B_WATCH_DIRECTORY,
 		BMessenger(this));
@@ -350,6 +363,8 @@ Volume::AddPackagesToRepository(BSolverRepository& repository, bool activeOnly)
 		if (activeOnly && !package->IsActive())
 			continue;
 
+		KWA_PRINT("Adding package to repository: %s\n", package->FileName().String());
+		
 		status_t error = repository.AddPackage(package->Info());
 		if (error != B_OK) {
 			ERROR("Volume::AddPackagesToRepository(): failed to add package %s "
@@ -565,6 +580,7 @@ Volume::IsPackageJobPending() const
 void
 Volume::Unmounted()
 {
+	KWA_PRINT("Volume umounted: %s\n", fPath.String());
 	if (fListener != NULL) {
 		stop_watching(BMessenger(this));
 		fListener = NULL;
@@ -647,6 +663,8 @@ Volume::PackagesByFileNameIterator() const
 int
 Volume::OpenRootDirectory() const
 {
+	KWA_PRINT("Opening root directory: %s\n", fPath.String());
+
 	BDirectory directory;
 	status_t error = directory.SetTo(&fRootDirectoryRef);
 	if (error != B_OK) {
@@ -662,6 +680,8 @@ Volume::OpenRootDirectory() const
 void
 Volume::ProcessPendingNodeMonitorEvents()
 {
+	KWA_PRINT("\n");
+
 	// get the events
 	NodeMonitorEventList events;
 	{
@@ -683,7 +703,9 @@ Volume::ProcessPendingNodeMonitorEvents()
 bool
 Volume::HasPendingPackageActivationChanges() const
 {
-	return !fPackagesToBeActivated.empty() || !fPackagesToBeDeactivated.empty();
+	bool result = !fPackagesToBeActivated.empty() || !fPackagesToBeDeactivated.empty();
+	KWA_PRINT("Does volume %s have pending package activations? %s", fPath.String(), result ? "YES" : "NO");
+	return result;
 }
 
 
@@ -692,6 +714,11 @@ Volume::ProcessPendingPackageActivationChanges()
 {
 	if (!HasPendingPackageActivationChanges())
 		return;
+
+	KWA_PRINT("Activating %ld and deactivating %ld packages on volume %s\n",
+			  fPackagesToBeActivated.size(),
+			  fPackagesToBeDeactivated.size(),
+			  fPath.String());
 
 	// perform the request
 	BCommitTransactionResult result;
@@ -713,6 +740,10 @@ Volume::ProcessPendingPackageActivationChanges()
 void
 Volume::ClearPackageActivationChanges()
 {
+	KWA_PRINT("Clearing package activation changes to_activate=%ld, to_deactivate=%ld\n",
+			  fPackagesToBeActivated.size(),
+			  fPackagesToBeDeactivated.size());
+
 	fPackagesToBeActivated.clear();
 	fPackagesToBeDeactivated.clear();
 }
@@ -722,6 +753,8 @@ status_t
 Volume::CreateTransaction(BPackageInstallationLocation location,
 	BActivationTransaction& _transaction, BDirectory& _transactionDirectory)
 {
+	KWA_PRINT("Creating transaction for location=%d\n", location);
+	
 	// open admin directory
 	BDirectory adminDirectory;
 	status_t error = _OpenPackagesSubDirectory(
@@ -765,8 +798,12 @@ Volume::CommitTransaction(const BActivationTransaction& transaction,
 	const PackageSet& packagesAlreadyAdded,
 	const PackageSet& packagesAlreadyRemoved, BCommitTransactionResult& _result)
 {
+	KWA_PRINT("Committing transaction %s, already_added=%ld, already_removed=%ld\n",
+			  transaction.TransactionDirectoryName().String(), packagesAlreadyAdded.size(),
+			  packagesAlreadyRemoved.size());
+
 	_CommitTransaction(NULL, &transaction, packagesAlreadyAdded,
-		packagesAlreadyRemoved, _result);
+					   packagesAlreadyRemoved, _result);
 }
 
 
@@ -783,6 +820,8 @@ Volume::_HandleEntryCreatedOrRemoved(const BMessage* message, bool created)
 		|| node_ref(deviceID, directoryID) != PackagesDirectoryRef()) {
 		return;
 	}
+
+	KWA_PRINT("Entry %s created=%s\n", name, created ? "YES" : "NO");
 
 	_QueueNodeMonitorEvent(name, created);
 }
@@ -807,8 +846,10 @@ Volume::_HandleEntryMoved(const BMessage* message)
 		return;
 	}
 
+	KWA_PRINT("Entry moved from=%s to=%s\n", fromName, toName);
+
 	AutoLocker<BLocker> eventsLock(fPendingNodeMonitorEventsLock);
-		// make sure for a move the two events cannot get split
+	// make sure for a move the two events cannot get split
 
 	if (fromDirectoryID == PackagesDirectoryID())
 		_QueueNodeMonitorEvent(fromName, false);
@@ -820,6 +861,8 @@ Volume::_HandleEntryMoved(const BMessage* message)
 void
 Volume::_QueueNodeMonitorEvent(const BString& name, bool wasCreated)
 {
+	KWA_PRINT("name=%s, was created=%s\n", name.String(), wasCreated ? "YES" : "NO");
+
 	if (name.IsEmpty()) {
 		ERROR("Volume::_QueueNodeMonitorEvent(): got empty name.\n");
 		return;
@@ -851,6 +894,8 @@ Volume::_QueueNodeMonitorEvent(const BString& name, bool wasCreated)
 void
 Volume::_PackagesEntryCreated(const char* name)
 {
+	KWA_PRINT("package entry created %s\n", name);
+
 INFORM("Volume::_PackagesEntryCreated(\"%s\")\n", name);
 	// Ignore the event, if the package is already known.
 	Package* package = fLatestState->FindPackage(name);
@@ -896,6 +941,8 @@ INFORM("Volume::_PackagesEntryCreated(\"%s\")\n", name);
 void
 Volume::_PackagesEntryRemoved(const char* name)
 {
+	KWA_PRINT("Package entry removed for %s\n", name);
+
 INFORM("Volume::_PackagesEntryRemoved(\"%s\")\n", name);
 	Package* package = fLatestState->FindPackage(name);
 	if (package == NULL)
@@ -957,6 +1004,8 @@ Volume::_ReadPackagesDirectory()
 		}
 	}
 
+	KWA_PRINT("Reading package directory %s with change count %ld\n", fPath.String(), fChangeCount);
+
 	return B_OK;
 }
 
@@ -964,6 +1013,8 @@ Volume::_ReadPackagesDirectory()
 status_t
 Volume::_InitLatestState()
 {
+	KWA_PRINT("Initializing latest state for %s\n", fPath.String());
+	
 	if (_InitLatestStateFromActivatedPackages() == B_OK)
 		return B_OK;
 
@@ -979,6 +1030,8 @@ Volume::_InitLatestState()
 		fChangeCount++;
 	}
 
+	KWA_PRINT("Latest state for %s has %ld changes\n", fPath.String(), fChangeCount);
+
 	return B_OK;
 }
 
@@ -986,8 +1039,53 @@ Volume::_InitLatestState()
 status_t
 Volume::_InitLatestStateFromActivatedPackages()
 {
-	// try reading the activation file
-	NotOwningEntryRef entryRef(PackagesDirectoryRef(), kActivationFileName);
+  KWA_PRINT("Initializing activated packages from %s with admin-dir=%s\n",
+            fPath.String(),
+			fPackagesDirectories[0].Name().String());
+
+  NotOwningEntryRef entryRef(PackagesDirectoryRef(), kActivationFileName);
+
+  // // try reading the activation file
+  // NotOwningEntryRef entryRef;
+  // {
+  //   BDirectory directory;
+  //   status_t error = directory.SetTo(&PackagesDirectoryRef());
+  //   if (error != B_OK) {
+  //     ERROR("Volume::_InitLatestStateFromActivatedPackages(): Could not get "
+  //           "directory: %s\n",
+  //           strerror(error));
+  //     return error;
+  //   }
+
+  //   BEntry entry;
+  //   error = directory.FindEntry("administrative", &entry, false);
+  //   if (error != B_OK) {
+  //     ERROR("Volume::_InitLatestStateFromActivatedPackages(): Unable to open "
+  //           "administrative dir: %s\n",
+  //           strerror(error));
+  //     return error;
+  //   }
+
+  //   directory.SetTo(&entry);
+  //   error = directory.FindEntry(kActivationFileName, &entry, false);
+  //   if (error != B_OK) {
+  //     ERROR("Volume::_InitLatestStateFromActivatedPackages(): Unable to open "
+  //           "activated packages"
+  //           " file: %s\n",
+  //           strerror(error));
+  //     return error;
+  //   }
+
+  //   error = entry.GetRef(&entryRef);
+  //   if (error != B_OK) {
+  //     ERROR("Volume::_InitLatestStateFromActivatedPackages(): Unable to get "
+  //           "ref for activated "
+  //           "packages file: %s\n",
+  //           strerror(error));
+  //     return error;
+  //   }
+  // 	}
+
 	BFile file;
 	status_t error = file.SetTo(&entryRef, B_READ_ONLY);
 	if (error != B_OK) {
@@ -1071,6 +1169,8 @@ Volume::_InitLatestStateFromActivatedPackages()
 status_t
 Volume::_GetActivePackages(int fd)
 {
+	KWA_PRINT("%s\n", fPath.String());
+
 	// get the info from packagefs
 	PackageFSGetPackageInfosRequest* request = NULL;
 	MemoryDeleter requestDeleter;
@@ -1099,7 +1199,9 @@ Volume::_GetActivePackages(int fd)
 	_DumpState(fLatestState);
 
 	// check whether that matches the expected state
-	if (_CheckActivePackagesMatchLatestState(request)) {
+	bool matches = _CheckActivePackagesMatchLatestState(request);
+	KWA_PRINT("Do active packages match latest state? %s\n", matches ? "YES" : "NO");
+	if (matches) {
 		INFORM("The latest volume state is also the currently active one\n");
 		fActiveState = fLatestState;
 		return B_OK;
@@ -1140,6 +1242,8 @@ Volume::_GetActivePackages(int fd)
 void
 Volume::_RunQueuedScripts()
 {
+	KWA_PRINT("%s\n", fPath.String());
+
 	BDirectory adminDirectory;
 	status_t error = _OpenPackagesSubDirectory(
 		RelativePath(kAdminDirectoryName), false, adminDirectory);
@@ -1237,6 +1341,9 @@ Volume::_CheckActivePackagesMatchLatestState(
 void
 Volume::_SetLatestState(VolumeState* state, bool isActive)
 {
+	KWA_PRINT("Setting latest state for %s, isActive=%s\n",
+			  fPath.String(),
+			  isActive ? "YES" : "NO");
 	AutoLocker<BLocker> locker(fLock);
 	if (isActive) {
 		if (fLatestState != fActiveState)
@@ -1293,6 +1400,8 @@ status_t
 Volume::_AddRepository(BSolver* solver, BSolverRepository& repository,
 	bool activeOnly, bool installed)
 {
+	KWA_PRINT("Adding repository to %s: %s\n", fPath.String(), repository.Name().String());
+	
 	status_t error = repository.SetTo(Path());
 	if (error != B_OK) {
 		ERROR("Volume::_AddRepository(): failed to init repository: %s\n",
@@ -1324,6 +1433,11 @@ status_t
 Volume::_OpenPackagesSubDirectory(const RelativePath& path, bool create,
 	BDirectory& _directory)
 {
+	KWA_PRINT("Open packages subdir path=%s, create=%s for %s\n",
+			  path.ToString().String(),
+			  create ? "YES" : "NO",
+			  fPath.String());
+
 	// open the packages directory
 	BDirectory directory;
 	status_t error = directory.SetTo(&PackagesDirectoryRef());
@@ -1343,6 +1457,11 @@ Volume::_CommitTransaction(BMessage* message,
 	const PackageSet& packagesAlreadyAdded,
 	const PackageSet& packagesAlreadyRemoved, BCommitTransactionResult& _result)
 {
+	KWA_PRINT("%s - already_added=%ld, already_removed=%ld\n",
+			  fPath.String(),
+			  packagesAlreadyAdded.size(),
+			  packagesAlreadyRemoved.size());
+	
 	_result.Unset();
 
 	// perform the request

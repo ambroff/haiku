@@ -19,7 +19,7 @@
 #	endif
 #endif
 #ifndef DEBUG
-#	define DEBUG 0
+#	define DEBUG 1
 #endif
 #if !DEBUG
 #	undef DEBUG_PRINT
@@ -176,6 +176,8 @@ void dbg_printf_end();
 	#define DARG(x)
 	#define D(x)					;
 #endif
+
+#define KWA_PRINT(x...) PRINT("KWA " x)
 
 #ifndef TOUCH
 #define TOUCH(var) (void)var

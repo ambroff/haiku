@@ -42,7 +42,6 @@
 #include "Utils.h"
 #include "Version.h"
 
-
 // node ID of the root directory
 static const ino_t kRootDirectoryID = 1;
 
@@ -555,6 +554,7 @@ Volume::IOCtl(Node* node, uint32 operation, void* buffer, size_t size)
 			if (error != B_OK)
 				RETURN_ERROR(B_BAD_VALUE);
 
+			// So this is what does it?
 			return _ChangeActivation(request);
 		}
 
@@ -1501,6 +1501,13 @@ Volume::_LoadPackage(PackagesDirectory* packagesDirectory, const char* name,
 status_t
 Volume::_ChangeActivation(ActivationChangeRequest& request)
 {
+	dprintf("KWA: Volume::_ChangeActivation(): items: %d\n", request.CountItems());
+
+	for (uint32 i = 0; i < request.CountItems(); ++i) {
+		auto item = request.ItemAt(i);
+		dprintf("KWA: item %d: %s type=%d\n", i, item->name, item->type);
+	}
+	
 	uint32 itemCount = request.CountItems();
 	if (itemCount == 0)
 		return B_OK;
