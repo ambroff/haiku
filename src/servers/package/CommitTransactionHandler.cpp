@@ -1677,7 +1677,7 @@ CommitTransactionHandler::_ChangePackageActivation(
 	if (fVolumeStateIsActive) {
 		_ChangePackageActivationIOCtl(packagesToActivate, packagesToDeactivate);
 	} else {
-		KWA_PRINT("Volume is not active, so we aren't doing anything about to-acive=%d, to-deactivate=%d\n", packagesToActivate.size(), packagesToDeactivate.size());
+		KWA_PRINT("Volume is not active, so we aren't doing anything about to-acive=%ld, to-deactivate=%ld\n", packagesToActivate.size(), packagesToDeactivate.size());
 		// TODO: Notify packagefs that active packages have been moved or do
 		// node monitoring in packagefs!
 	}

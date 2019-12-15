@@ -1019,14 +1019,14 @@ Volume::_InitLatestState()
 		return B_OK;
 
 	INFORM("Failed to get activated packages info from activated packages file."
-		" Assuming all package files in package directory are activated.\n");
+		" Assuming all package files in package directory require activation.\n");
 
 	AutoLocker<BLocker> locker(fLock);
 
 	for (PackageFileNameHashTable::Iterator it
 				= fLatestState->ByFileNameIterator();
 			Package* package = it.Next();) {
-		fLatestState->SetPackageActive(package, true);
+		fLatestState->SetPackageActive(package, false);
 		fChangeCount++;
 	}
 
@@ -1181,6 +1181,8 @@ Volume::_GetActivePackages(int fd)
 			RETURN_ERROR(B_NO_MEMORY);
 		requestDeleter.SetTo(request);
 
+		// KWA FIXME: It appears that this ioctl, on first boot, gets back all packages in the packages
+		// directory and claims they are active, when that's not actually true. It should probably return either 
 		if (ioctl(fd, PACKAGE_FS_OPERATION_GET_PACKAGE_INFOS, request,
 				bufferSize) != 0) {
 			ERROR("Volume::_GetActivePackages(): failed to get active package "
@@ -1288,6 +1290,9 @@ bool
 Volume::_CheckActivePackagesMatchLatestState(
 	PackageFSGetPackageInfosRequest* request)
 {
+	// KWA FIXME: this is the place where the active packages provided by packagefs ioctl and the set of presumed
+	// active packages known by this process are compared. If they don't match, then a new transaction is
+	// required.
 	if (fPackagesDirectoryCount != 1) {
 		INFORM("An old packages state (\"%s\") seems to be active.\n",
 			fPackagesDirectories[fPackagesDirectoryCount - 1].Name().String());

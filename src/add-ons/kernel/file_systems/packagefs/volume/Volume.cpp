@@ -497,6 +497,7 @@ Volume::IOCtl(Node* node, uint32 operation, void* buffer, size_t size)
 			return B_OK;
 		}
 
+		// KWA: FIXME: this is where packagefs determines the set of packages that are already active.
 		case PACKAGE_FS_OPERATION_GET_PACKAGE_INFOS:
 		{
 			if (size < sizeof(PackageFSGetPackageInfosRequest))
@@ -771,8 +772,14 @@ Volume::_AddInitialPackages()
 	}
 
 	if (error != B_OK) {
-		INFORM("Loading packages from activation file failed. Loading all "
-			"packages in packages directory.\n");
+		// KWA FIXME: This branch seems wrong. Here we've failed to load the activated-packages file on first boot,
+		// since it doesn't exist. But it seems that we're just loading all packages assuming that they're already
+		// loaded.
+		//
+		// My gut says that the right thing to do here is to load *no* packages, but then I don't actually think
+		// that the system will boot. So... that's not going to work.
+		INFORM("Loading packages from activation file failed. Loading only the packages required to boot "
+			"from packages directory. The package daemon will activate the remaining packages.\n");
 
 		// remove all packages already added
 		{
@@ -782,9 +789,63 @@ Volume::_AddInitialPackages()
 		}
 
 		// read the whole directory
-		error = _AddInitialPackagesFromDirectory();
-		if (error != B_OK)
-			RETURN_ERROR(error);
+		// KWA: FIXME: Instead, we should *only* assume that the haiku package is activated and load that one. The
+		// rest will be activated on first boot by the package daemon. It will use a ioctl to query the packagefs
+		// to see which packages are activated and compare to its own list. Since only the haiku package will be
+		// activated, it will create a new transaction activating the remaining packages.
+		//
+		// This means that first boot after install will always create one new transaction.
+		{
+			// iterate through the dir and create packages
+			int fd = openat(fPackagesDirectory->DirectoryFD(), ".", O_RDONLY);
+			if (fd < 0) {
+				ERROR("Failed to open packages directory: %s\n",
+					  strerror(errno));
+				RETURN_ERROR(errno);
+			}
+
+			DIR *dir = fdopendir(fd);
+			if (dir == NULL) {
+				ERROR("Failed to open packages directory \"%s\": %s\n",
+					  fPackagesDirectory->Path(), strerror(errno));
+				RETURN_ERROR(errno);
+			}
+			CObjectDeleter<DIR, int> dirCloser(dir, closedir);
+
+			while (dirent *entry = readdir(dir)) {
+				// skip "." and ".."
+				if (strcmp(entry->d_name, ".") == 0 ||
+					strcmp(entry->d_name, "..") == 0)
+					continue;
+				
+				// also skip any entry without a ".hpkg" extension
+				size_t nameLength = strlen(entry->d_name);
+				if (nameLength < 5 || memcmp(entry->d_name + nameLength - 5,
+											 ".hpkg", 5) != 0) {
+					continue;
+				}
+
+				// Also skip packages that don't start with "haiku"
+				// KWA FIXME: We should whittle this down to the bare minimum. Probably just the base system.
+				// Just matching the start as "haiku" will match about 5 packages from a base install I believe.
+				if (memcmp(entry->d_name, "haiku", 5)) {
+					continue;
+				}
+
+				dprintf("KWA loading minimal package set including %s\n", entry->d_name);
+				status_t result = _LoadAndAddInitialPackage(fPackagesDirectory, entry->d_name,
+															false);
+				if (result != B_OK) {
+					ERROR("KWA failed to load entry %s: %s\n", entry->d_name, strerror(result));
+					RETURN_ERROR(result);
+				}
+			}
+		}
+
+		return B_OK;
+        //         error = _AddInitialPackagesFromDirectory();
+		// if (error != B_OK)
+		// 	RETURN_ERROR(error);
 	}
 
 	// add the packages to the node tree
@@ -812,6 +873,9 @@ Volume::_AddInitialPackagesFromActivationFile(
 	PackagesDirectory* packagesDirectory)
 {
 	// try reading the activation file
+	// KWA: FIXME: I don't think this path is correct, since it should be administrative/activated-packages
+	// or something.
+	// KWA: FIXME: Confirm that this code is actually executed.
 	int fd = openat(packagesDirectory->DirectoryFD(),
 		packagesDirectory == fPackagesDirectory
 			? kActivationFilePath : kActivationFileName,
@@ -876,7 +940,7 @@ Volume::_AddInitialPackagesFromActivationFile(
 		}
 
 		status_t error = _LoadAndAddInitialPackage(packagesDirectory,
-			packageName);
+												   packageName, false);
 		if (error != B_OK)
 			RETURN_ERROR(error);
 
@@ -917,7 +981,7 @@ Volume::_AddInitialPackagesFromDirectory()
 			continue;
 		}
 
-		_LoadAndAddInitialPackage(fPackagesDirectory, entry->d_name);
+		_LoadAndAddInitialPackage(fPackagesDirectory, entry->d_name, false);
 	}
 
 	return B_OK;
@@ -926,10 +990,11 @@ Volume::_AddInitialPackagesFromDirectory()
 
 status_t
 Volume::_LoadAndAddInitialPackage(PackagesDirectory* packagesDirectory,
-	const char* name)
+								  const char* name,
+								  bool assume_activated)
 {
 	Package* package;
-	status_t error = _LoadPackage(packagesDirectory, name, package);
+	status_t error = _LoadPackage(packagesDirectory, name, package, assume_activated);
 	if (error != B_OK) {
 		ERROR("Failed to load package \"%s\": %s\n", name, strerror(error));
 		RETURN_ERROR(error);
@@ -1459,7 +1524,8 @@ Volume::_RemoveNodeAndVNode(Node* node)
 
 status_t
 Volume::_LoadPackage(PackagesDirectory* packagesDirectory, const char* name,
-	Package*& _package)
+					 Package*& _package,
+					 bool activated)
 {
 	// Find the package -- check the specified packages directory and iterate
 	// toward the newer states.
@@ -1586,7 +1652,7 @@ Volume::_ChangeActivation(ActivationChangeRequest& request)
 		}
 
 		Package* package;
-		status_t error = _LoadPackage(fPackagesDirectory, item->name, package);
+		status_t error = _LoadPackage(fPackagesDirectory, item->name, package, false);
 		if (error != B_OK) {
 			ERROR("Volume::_ChangeActivation(): failed to load package "
 				"\"%s\"\n", item->name);

@@ -119,7 +119,8 @@ private:
 			status_t			_AddInitialPackagesFromDirectory();
 			status_t			_LoadAndAddInitialPackage(
 									PackagesDirectory* packagesDirectory,
-									const char* name);
+									const char* name,
+									bool assume_activated);
 
 	inline	void				_AddPackage(Package* package);
 	inline	void				_RemovePackage(Package* package);
@@ -154,7 +155,8 @@ private:
 
 			status_t			_LoadPackage(
 									PackagesDirectory* packagesDirectory,
-									const char* name, Package*& _package);
+									const char* name, Package*& _package,
+									bool activated);
 
 			status_t			_ChangeActivation(
 									ActivationChangeRequest& request);
