@@ -795,57 +795,58 @@ Volume::_AddInitialPackages()
 		// activated, it will create a new transaction activating the remaining packages.
 		//
 		// This means that first boot after install will always create one new transaction.
-		{
-			// iterate through the dir and create packages
-			int fd = openat(fPackagesDirectory->DirectoryFD(), ".", O_RDONLY);
-			if (fd < 0) {
-				ERROR("Failed to open packages directory: %s\n",
-					  strerror(errno));
-				RETURN_ERROR(errno);
-			}
+		// {
+		// 	// iterate through the dir and create packages
+		// 	int fd = openat(fPackagesDirectory->DirectoryFD(), ".", O_RDONLY);
+		// 	if (fd < 0) {
+		// 		ERROR("Failed to open packages directory: %s\n",
+		// 			  strerror(errno));
+		// 		RETURN_ERROR(errno);
+		// 	}
 
-			DIR *dir = fdopendir(fd);
-			if (dir == NULL) {
-				ERROR("Failed to open packages directory \"%s\": %s\n",
-					  fPackagesDirectory->Path(), strerror(errno));
-				RETURN_ERROR(errno);
-			}
-			CObjectDeleter<DIR, int> dirCloser(dir, closedir);
+		// 	DIR *dir = fdopendir(fd);
+		// 	if (dir == NULL) {
+		// 		ERROR("Failed to open packages directory \"%s\": %s\n",
+		// 			  fPackagesDirectory->Path(), strerror(errno));
+		// 		RETURN_ERROR(errno);
+		// 	}
+		// 	CObjectDeleter<DIR, int> dirCloser(dir, closedir);
 
-			while (dirent *entry = readdir(dir)) {
-				// skip "." and ".."
-				if (strcmp(entry->d_name, ".") == 0 ||
-					strcmp(entry->d_name, "..") == 0)
-					continue;
+		// 	while (dirent *entry = readdir(dir)) {
+		// 		// skip "." and ".."
+		// 		if (strcmp(entry->d_name, ".") == 0 ||
+		// 			strcmp(entry->d_name, "..") == 0)
+		// 			continue;
 				
-				// also skip any entry without a ".hpkg" extension
-				size_t nameLength = strlen(entry->d_name);
-				if (nameLength < 5 || memcmp(entry->d_name + nameLength - 5,
-											 ".hpkg", 5) != 0) {
-					continue;
-				}
+		// 		// also skip any entry without a ".hpkg" extension
+		// 		size_t nameLength = strlen(entry->d_name);
+		// 		if (nameLength < 5 || memcmp(entry->d_name + nameLength - 5,
+		// 									 ".hpkg", 5) != 0) {
+		// 			continue;
+		// 		}
 
-				// Also skip packages that don't start with "haiku"
-				// KWA FIXME: We should whittle this down to the bare minimum. Probably just the base system.
-				// Just matching the start as "haiku" will match about 5 packages from a base install I believe.
-				if (memcmp(entry->d_name, "haiku", 5)) {
-					continue;
-				}
+		// 		// Also skip packages that don't start with "haiku"
+		// 		// KWA FIXME: We should whittle this down to the bare minimum. Probably just the base system.
+		// 		// Just matching the start as "haiku" will match about 5 packages from a base install I believe.
+		// 		// KWA FIXME: instead, for now, just skip the ssh package for testing.
+		// 		//if (memcmp(entry->d_name, "haiku", 5)) {
+		// 		if (nameLength > 7 && 0 == memcmp(entry->d_name, "openssh", 7)) {
+		// 			continue;
+		// 		}
 
-				dprintf("KWA loading minimal package set including %s\n", entry->d_name);
-				status_t result = _LoadAndAddInitialPackage(fPackagesDirectory, entry->d_name,
-															false);
-				if (result != B_OK) {
-					ERROR("KWA failed to load entry %s: %s\n", entry->d_name, strerror(result));
-					RETURN_ERROR(result);
-				}
-			}
-		}
+		// 		dprintf("KWA loading minimal package set including %s\n", entry->d_name);
+		// 		status_t result = _LoadAndAddInitialPackage(fPackagesDirectory, entry->d_name,
+		// 													false);
+		// 		if (result != B_OK) {
+		// 			ERROR("KWA failed to load entry %s: %s\n", entry->d_name, strerror(result));
+		// 			RETURN_ERROR(result);
+		// 		}
+		// 	}
+		// }
 
-		return B_OK;
-        //         error = _AddInitialPackagesFromDirectory();
-		// if (error != B_OK)
-		// 	RETURN_ERROR(error);
+		error = _AddInitialPackagesFromDirectory();
+		if (error != B_OK)
+			RETURN_ERROR(error);
 	}
 
 	// add the packages to the node tree
