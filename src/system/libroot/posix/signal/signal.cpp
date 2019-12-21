@@ -24,6 +24,12 @@ signal_common(int signal, __sighandler_t signalHandler, int flags)
 {
 	struct sigaction newAction, oldAction;
 
+	// check signal range
+	if (signal < 0 || signal > MAX_SIGNAL_NUMBER_BEOS) {
+		__set_errno(EINVAL);
+		return SIG_ERR;
+	}
+
 	// setup the replacement sigaction
 	newAction.sa_handler = signalHandler;
 	newAction.sa_mask = 0;
@@ -40,12 +46,6 @@ signal_common(int signal, __sighandler_t signalHandler, int flags)
 __sighandler_t
 __signal_beos(int signal, __sighandler_t signalHandler)
 {
-	// check signal range
-	if (signal < 0 || signal > MAX_SIGNAL_NUMBER_BEOS) {
-		__set_errno(EINVAL);
-		return SIG_ERR;
-	}
-
 	// set the signal handler
 	__sighandler_t result = signal_common(signal, signalHandler,
 		SA_BEOS_COMPATIBLE_HANDLER);
