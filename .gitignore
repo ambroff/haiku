@@ -7,6 +7,10 @@ build/user_config_headers
 # Vim swp files
 .*.swp
 
+# Ignore files used by clangd + lsp
+/compile_commands.json
+/.clangd/
+
 conf.sh
 
 # compiled/optimized Python
