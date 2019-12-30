@@ -225,45 +225,45 @@ SimpleTransformTest::AddTests(BTestSuite& parent)
 	CppUnit::TestSuite* const suite = new CppUnit::TestSuite(
 		"SimpleTransformTest");
 
-	suite->addTest(new CppUnit::TestCaller<SimpleTransformTest>(
-		"SimpleTransformTest::TransformPoint",
-		&SimpleTransformTest::TransformPoint));
-	suite->addTest(new CppUnit::TestCaller<SimpleTransformTest>(
-		"SimpleTransformTest::TransformIntPoint",
-		&SimpleTransformTest::TransformIntPoint));
-	suite->addTest(new CppUnit::TestCaller<SimpleTransformTest>(
-		"SimpleTransformTest::TransformRect",
-		&SimpleTransformTest::TransformRect));
-	suite->addTest(new CppUnit::TestCaller<SimpleTransformTest>(
-		"SimpleTransformTest::TransformIntRect",
-		&SimpleTransformTest::TransformIntRect));
-	suite->addTest(new CppUnit::TestCaller<SimpleTransformTest>(
-		"SimpleTransformTest::TransformRegion",
-		&SimpleTransformTest::TransformRegion));
-	suite->addTest(new CppUnit::TestCaller<SimpleTransformTest>(
-		"SimpleTransformTest::TransformGradientLinear",
-		&SimpleTransformTest::TransformGradientLinear));
-	suite->addTest(new CppUnit::TestCaller<SimpleTransformTest>(
-		"SimpleTransformTest::TransformGradientRadial",
-		&SimpleTransformTest::TransformGradientRadial));
-	suite->addTest(new CppUnit::TestCaller<SimpleTransformTest>(
-		"SimpleTransformTest::TransformGradientRadialFocus",
-		&SimpleTransformTest::TransformGradientRadialFocus));
-	suite->addTest(new CppUnit::TestCaller<SimpleTransformTest>(
-		"SimpleTransformTest::TransformGradientDiamond",
-		&SimpleTransformTest::TransformGradientDiamond));
-	suite->addTest(new CppUnit::TestCaller<SimpleTransformTest>(
-		"SimpleTransformTest::TransformGradientConic",
-		&SimpleTransformTest::TransformGradientConic));
-	suite->addTest(new CppUnit::TestCaller<SimpleTransformTest>(
-		"SimpleTransformTest::TransformPointArray",
-		&SimpleTransformTest::TransformPointArray));
-	suite->addTest(new CppUnit::TestCaller<SimpleTransformTest>(
-		"SimpleTransformTest::TransformRectArray",
-		&SimpleTransformTest::TransformRectArray));
-	suite->addTest(new CppUnit::TestCaller<SimpleTransformTest>(
-		"SimpleTransformTest::TransformRegionArray",
-		&SimpleTransformTest::TransformRegionArray));
+	// suite->addTest(new CppUnit::TestCaller<SimpleTransformTest>(
+	// 	"SimpleTransformTest::TransformPoint",
+	// 	&SimpleTransformTest::TransformPoint));
+	// suite->addTest(new CppUnit::TestCaller<SimpleTransformTest>(
+	// 	"SimpleTransformTest::TransformIntPoint",
+	// 	&SimpleTransformTest::TransformIntPoint));
+	// suite->addTest(new CppUnit::TestCaller<SimpleTransformTest>(
+	// 	"SimpleTransformTest::TransformRect",
+	// 	&SimpleTransformTest::TransformRect));
+	// suite->addTest(new CppUnit::TestCaller<SimpleTransformTest>(
+	// 	"SimpleTransformTest::TransformIntRect",
+	// 	&SimpleTransformTest::TransformIntRect));
+	// suite->addTest(new CppUnit::TestCaller<SimpleTransformTest>(
+	// 	"SimpleTransformTest::TransformRegion",
+	// 	&SimpleTransformTest::TransformRegion));
+	// suite->addTest(new CppUnit::TestCaller<SimpleTransformTest>(
+	// 	"SimpleTransformTest::TransformGradientLinear",
+	// 	&SimpleTransformTest::TransformGradientLinear));
+	// suite->addTest(new CppUnit::TestCaller<SimpleTransformTest>(
+	// 	"SimpleTransformTest::TransformGradientRadial",
+	// 	&SimpleTransformTest::TransformGradientRadial));
+	// suite->addTest(new CppUnit::TestCaller<SimpleTransformTest>(
+	// 	"SimpleTransformTest::TransformGradientRadialFocus",
+	// 	&SimpleTransformTest::TransformGradientRadialFocus));
+	// suite->addTest(new CppUnit::TestCaller<SimpleTransformTest>(
+	// 	"SimpleTransformTest::TransformGradientDiamond",
+	// 	&SimpleTransformTest::TransformGradientDiamond));
+	// suite->addTest(new CppUnit::TestCaller<SimpleTransformTest>(
+	// 	"SimpleTransformTest::TransformGradientConic",
+	// 	&SimpleTransformTest::TransformGradientConic));
+	// suite->addTest(new CppUnit::TestCaller<SimpleTransformTest>(
+	// 	"SimpleTransformTest::TransformPointArray",
+	// 	&SimpleTransformTest::TransformPointArray));
+	// suite->addTest(new CppUnit::TestCaller<SimpleTransformTest>(
+	// 	"SimpleTransformTest::TransformRectArray",
+	// 	&SimpleTransformTest::TransformRectArray));
+	// suite->addTest(new CppUnit::TestCaller<SimpleTransformTest>(
+	// 	"SimpleTransformTest::TransformRegionArray",
+	// 	&SimpleTransformTest::TransformRegionArray));
 
 	parent.addTest("SimpleTransformTest", suite);
 }

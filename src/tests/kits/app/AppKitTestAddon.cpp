@@ -20,7 +20,7 @@ BTestSuite* getTestSuite2() {
 
 	// ##### Add test suites here #####
 	suite->addTest("BApplication", ApplicationTestSuite());
-	suite->addTest("BClipboard", ClipboardTestSuite());
+	//suite->addTest("BClipboard", ClipboardTestSuite());
 //	suite->addTest("BCursor", CursorTestSuite());
 	suite->addTest("BHandler", HandlerTestSuite());
 	suite->addTest("BLooper", LooperTestSuite());

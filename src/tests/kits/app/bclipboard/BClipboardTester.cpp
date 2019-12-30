@@ -56,8 +56,8 @@ Test* BClipboardTester::Suite()
 {
 	TestSuite* SuiteOfTests = new TestSuite;
 
-	ADD_TEST4(BClipboard, SuiteOfTests, BClipboardTester, BClipboard1);
-	ADD_TEST4(BClipboard, SuiteOfTests, BClipboardTester, BClipboard2);
+	// ADD_TEST4(BClipboard, SuiteOfTests, BClipboardTester, BClipboard1);
+	// ADD_TEST4(BClipboard, SuiteOfTests, BClipboardTester, BClipboard2);
 
 	return SuiteOfTests;
 }

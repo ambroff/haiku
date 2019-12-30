@@ -339,6 +339,8 @@ hoardHeap::freeBlock(block * &b, superblock * &sb,
 	decUStats(sizeclass);
 	const int newFullness = sb->getFullness();
 
+	debug_printf("KWA: hoardHeap::freeBlock(%p, %p, %d, %p): oldFullness=%d, newFullness=%d\n", b, sb, sizeclass, pHeap, oldFullness, newFullness);
+
 	// Free big superblocks.
 	if (sb->getNumBlocks() == 1) {
 		removeSuperblock(sb, sizeclass);
@@ -438,6 +440,11 @@ hoardHeap::freeBlock(block * &b, superblock * &sb,
 
 			// Give the superblock back to the process heap.
 			pHeap->release(maxSb);
+
+			debug_printf(
+				"KWA: hoardHeap::freeBlock(%p, %p, %d, %p): "
+				"releasing superblock back to process heap",
+				b, sb, sizeclass, pHeap);
 		}
 	}
 

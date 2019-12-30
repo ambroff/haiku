@@ -23,8 +23,11 @@
 #include "config.h"
 
 #include "heap.h"
-#include "threadheap.h"
 #include "processheap.h"
+#include "threadheap.h"
+#include <user_thread.h>
+
+#define KTRACE(format...) ktrace_printf(format)
 
 using namespace BPrivate;
 
@@ -44,6 +47,12 @@ threadHeap::threadHeap(void)
 void *
 threadHeap::malloc(const size_t size)
 {
+	bool should_log = (size == 2000000013);
+
+	if (should_log) {
+		KTRACE("KWA: threadHeap::malloc(%lu) called\n");
+	}
+
 #if MAX_INTERNAL_FRAGMENTATION == 2
 	if (size > 1063315264UL) {
 		debug_printf("malloc() of %lu bytes asked\n", size);
@@ -54,6 +63,10 @@ threadHeap::malloc(const size_t size)
 	const int sizeclass = sizeClass(size);
 	block *b = NULL;
 
+	if (should_log) {
+		KTRACE("KWA: threadHeap::malloc(%lu) using sizeclass=%d\n", size, sizeclass);
+	}
+
 	lock();
 
 	// Look for a free block.
@@ -62,6 +75,9 @@ threadHeap::malloc(const size_t size)
 
 	superblock *sb = findAvailableSuperblock(sizeclass, b, _pHeap);
 	if (sb == NULL) {
+		if (should_log) {
+			KTRACE("KWA: No memory locally, we need to get more from the process heap\n");
+		}
 		// We don't have memory locally.
 		// Try to get more from the process heap.
 
@@ -71,9 +87,15 @@ threadHeap::malloc(const size_t size)
 		// If we didn't get any memory from the process heap,
 		// we'll have to allocate our own superblock.
 		if (sb == NULL) {
+			if (should_log) {
+				KTRACE("KWA: Still not enough memory, so need to allocate own superblock\n");
+			}
 			sb = superblock::makeSuperblock(sizeclass, _pHeap);
 			if (sb == NULL) {
 				// We're out of memory!
+				if (should_log) {
+					KTRACE("KWA: Oops, out of memory, can't do it.\n");
+				}
 				unlock();
 				return NULL;
 			}
@@ -95,6 +117,8 @@ threadHeap::malloc(const size_t size)
 
 		// Insert the superblock into our list.
 		insertSuperblock(sizeclass, sb, _pHeap);
+	} else if (should_log) {
+		KTRACE("KWA: found available superblock %p for malloc(%lu)\n", sb, size);
 	}
 
 	assert(b != NULL);

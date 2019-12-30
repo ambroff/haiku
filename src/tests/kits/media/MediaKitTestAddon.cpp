@@ -20,7 +20,7 @@ getTestSuite()
 
 	// TODO: messes up process's heap, other tests crash in Hoard after it is
 	// run
-	//AreaTest::AddTests(*suite);
+	AreaTest::AddTests(*suite);
 	BufferTest::AddTests(*suite);
 	FormatDescriptionsTest::AddTests(*suite);
 	SizeofTest::AddTests(*suite);

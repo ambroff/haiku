@@ -2360,8 +2360,10 @@ BString::_Resize(int32 length)
 	if (length < 0)
 		length = 0;
 
+	//fprintf(stderr, "KWA: calling realloc(%p, %d) on BString\n", data, length + kPrivateDataOffset + 1);
 	char* newData = (char*)realloc(data, length + kPrivateDataOffset + 1);
 	if (newData == NULL) {
+		printf("KWA: realloc() failed in BString[data=%p]::_Resize(%d)\n", data, length);
 		free(data);
 		data = NULL;
 		return NULL;

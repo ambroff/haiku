@@ -305,6 +305,12 @@ malloc(size_t size)
 {
 	static processHeap *pHeap = getAllocator();
 
+	bool should_log = (size == 2000000013);
+	if (should_log) {
+		KTRACE("KWA: malloc(%lu) called, heap=%p\n", size, pHeap);
+		//debugger("I wanna know how we got here\n");
+	}
+
 #if HEAP_WALL
 	size += 2 * HEAP_WALL_SIZE;
 #endif
@@ -315,7 +321,10 @@ malloc(size_t size)
 	if (addr == NULL) {
 		undefer_signals();
 		__set_errno(B_NO_MEMORY);
-		KTRACE("malloc(%lu) -> NULL", size);
+
+		if (should_log) {
+			KTRACE("KWA: malloc(%lu) -> NULL", size);
+		}
 		return NULL;
 	}
 
@@ -329,7 +338,9 @@ malloc(size_t size)
 	addr = set_wall(addr, size);
 #endif
 
-	KTRACE("malloc(%lu) -> %p", size, addr);
+	if (should_log) {
+		KTRACE("KWA: malloc(%lu) -> %p", size, addr);
+	}
 
 	return addr;
 }
@@ -483,10 +494,14 @@ valloc(size_t size)
 	return memalign(B_PAGE_SIZE, size);
 }
 
-
 extern "C" void *
 realloc(void *ptr, size_t size)
 {
+	bool should_log = (size == 2000000013);
+	if (should_log) {
+		KTRACE("KWA: Calling realloc(%p, %ld)\n", ptr, size);
+	}
+
 	if (ptr == NULL)
 		return malloc(size);
 

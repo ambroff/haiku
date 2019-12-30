@@ -5,7 +5,7 @@
 
 // enable tracing (0/1)
 #ifndef ENABLE_TRACING
-#	define ENABLE_TRACING 0
+#	define ENABLE_TRACING 1
 #endif
 
 // tracing buffer size (in bytes)
@@ -60,7 +60,7 @@
 #define TEAM_TRACING							0
 #define TRANSLATION_MAP_TRACING					0
 #define TRANSLATION_MAP_TRACING_STACK_TRACE		0	/* stack trace depth */
-#define USER_MALLOC_TRACING						0
+#define USER_MALLOC_TRACING						1
 #define VFS_PAGES_IO_TRACING					0
 #define VM_CACHE_TRACING						0
 #define VM_CACHE_TRACING_STACK_TRACE			0	/* stack trace depth */

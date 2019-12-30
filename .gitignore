@@ -15,3 +15,7 @@ conf.sh
 
 # Mac OS X directory attributes
 .DS_Store
+
+# LSP + clangd
+/.clangd/
+/compile_commands.json
