@@ -49,7 +49,7 @@ BasicTest::tearDown()
 	int32 availableFDs = count_available_fds();
 	if (availableFDs != fAvailableFDs) {
 		printf("WARNING: Number of available file descriptors has changed "
-			   "during test: %ld -> %ld\n", fAvailableFDs, availableFDs);
+			   "during test: %d -> %d\n", fAvailableFDs, availableFDs);
 		fAvailableFDs = availableFDs;
 	}
 	BTestCase::tearDown();
@@ -69,14 +69,14 @@ void
 BasicTest::dumpStat(struct stat &st)
 {
 	printf("stat:\n");
-	printf("  st_dev    : %lx\n", st.st_dev);
-	printf("  st_ino    : %Lx\n", st.st_ino);
+	printf("  st_dev    : %dx\n", st.st_dev);
+	printf("  st_ino    : %lx\n", st.st_ino);
 	printf("  st_mode   : %x\n", st.st_mode);
 	printf("  st_nlink  : %x\n", st.st_nlink);
 	printf("  st_uid    : %x\n", st.st_uid);
 	printf("  st_gid    : %x\n", st.st_gid);
-	printf("  st_size   : %Ld\n", st.st_size);
-	printf("  st_blksize: %ld\n", st.st_blksize);
+	printf("  st_size   : %ld\n", st.st_size);
+	printf("  st_blksize: %d\n", st.st_blksize);
 	printf("  st_atime  : %lx\n", st.st_atime);
 	printf("  st_mtime  : %lx\n", st.st_mtime);
 	printf("  st_ctime  : %lx\n", st.st_ctime);
@@ -89,11 +89,11 @@ BasicTest::createVolume(string imageFile, string mountPoint, int32 megs,
 						bool makeMountPoint)
 {
 	char megsString[16];
-	sprintf(megsString, "%ld", megs);
+	sprintf(megsString, "%d", megs);
 	execCommand(string("dd if=/dev/zero of=") + imageFile
 					+ " bs=1M count=" + megsString
 					+ " &> /dev/null"
-				+ " ; mkbfs " + imageFile
+				+ " ; mkfs -t bfs " + imageFile
 					+ " > /dev/null"
 				+ " ; sync"
 				+ (makeMountPoint ? " ; mkdir " + mountPoint : "")
@@ -108,6 +108,6 @@ BasicTest::deleteVolume(string imageFile, string mountPoint,
 	execCommand(string("sync")
 				+ " ; unmount " + mountPoint
 				+ (deleteMountPoint ? " ; rmdir " + mountPoint : "")
-				+ " ; rm " + imageFile);
+				+ " ; rm -f " + imageFile);
 }
 

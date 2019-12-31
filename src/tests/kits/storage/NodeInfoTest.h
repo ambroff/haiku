@@ -10,7 +10,6 @@
 
 class BApplication;
 class BBitmap;
-class CppUnit::Test;
 
 class NodeInfoTest : public BasicTest
 {
