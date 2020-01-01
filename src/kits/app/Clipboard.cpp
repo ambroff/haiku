@@ -276,7 +276,6 @@ BClipboard::_AssertLocked() const
 {
 	// This function is for jumping to the debugger if not locked
 	if (!fLock.IsLocked()) {
-		debugger("The clipboard must be locked before proceeding.");
 		return false;
 	}
 	return true;
