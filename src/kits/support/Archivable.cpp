@@ -730,6 +730,11 @@ instantiate_object(BMessage* archive, image_id* _id)
 		*status = B_BAD_VALUE;
 		errno = B_BAD_VALUE;
 		return NULL;
+	} else {
+		// In BeOS, if the object could be instantiated without loading an
+		// add-on image, then the image_id pointer is set to B_BAD_VALUE.
+		*status = B_BAD_VALUE;
+		errno = B_OK;
 	}
 
 	// if Class::Instantiate(BMessage*) was found
