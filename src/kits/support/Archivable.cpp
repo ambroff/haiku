@@ -684,7 +684,7 @@ instantiate_object(BMessage* archive, image_id* _id)
 		if (err != B_OK) {
 			syslog(LOG_ERR, "instantiate_object failed: Error finding app "
 				"with signature \"%s\" (%s)", signature, strerror(err));
-			*status = err;
+			*status = B_BAD_VALUE;
 			errno = err;
 			return NULL;
 		}
