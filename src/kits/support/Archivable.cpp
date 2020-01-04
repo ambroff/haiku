@@ -372,7 +372,7 @@ BArchivable::Perform(perform_code d, void* arg)
 		}
 	}
 
-	return B_NAME_NOT_FOUND;
+	return B_ERROR;
 }
 
 
