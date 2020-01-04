@@ -30,7 +30,7 @@ TRemoteTestObject::TRemoteTestObject(BMessage *archive)
 	data = archive->FindInt32("TRemoteTestObject::data");
 }
 //------------------------------------------------------------------------------
-status_t TRemoteTestObject::Archive(BMessage *archive, bool deep)
+status_t TRemoteTestObject::Archive(BMessage *archive, bool deep) const
 {
 	status_t err = archive->AddString("class", "TRemoteTestObject");
 

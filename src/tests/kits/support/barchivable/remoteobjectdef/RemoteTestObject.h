@@ -29,7 +29,7 @@ class TRemoteTestObject : public BArchivable
 
 		// All the archiving-related stuff
 		TRemoteTestObject(BMessage* archive);
-		status_t Archive(BMessage* archive, bool deep = true);
+		virtual status_t Archive(BMessage* archive, bool deep = true) const;
 		static TRemoteTestObject* Instantiate(BMessage* archive);
 
 	private:
