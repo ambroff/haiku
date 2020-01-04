@@ -643,6 +643,7 @@ instantiate_object(BMessage* archive, image_id* _id)
 	if (archive == NULL) {
 		syslog(LOG_ERR, "instantiate_object failed: NULL BMessage argument");
 		*status = B_BAD_VALUE;
+		errno = B_BAD_VALUE;
 		return NULL;
 	}
 
