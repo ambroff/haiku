@@ -9,11 +9,12 @@ rule UnitTestDependency
 
 rule UnitTestLib
 {
-	# UnitTestLib <lib> : <sources> : <libraries> ;
+	# UnitTestLib <lib> : <sources> : <libraries> : <resources> ;
 	#
 	local lib = $(1) ;
 	local sources = $(2) ;
 	local libraries = $(3) ;
+	AddResources $(1) : $(4) ;
 
 	# if TEST_DEBUG is defined, we turn on debugging
 	if $(TEST_DEBUG) {
