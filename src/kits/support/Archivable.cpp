@@ -810,11 +810,13 @@ find_instantiation_func(BMessage* archive)
 
 	const char* name = NULL;
 	const char* signature = NULL;
-	if (archive->FindString(B_CLASS_FIELD, &name) != B_OK
-		|| archive->FindString(B_ADD_ON_FIELD, &signature)) {
+	if (archive->FindString(B_CLASS_FIELD, &name) != B_OK) {
 		errno = B_BAD_VALUE;
 		return NULL;
 	}
+
+	// The signature is optional, so it's OK for it to be NULL.
+	archive->FindString(B_ADD_ON_FIELD, &signature);
 
 	return find_instantiation_func(name, signature);
 }
