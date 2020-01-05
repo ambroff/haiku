@@ -170,6 +170,7 @@ void TInstantiateObjectTester::Case5()
 	Archive.AddString("add_on", gValidSig);
 	image_id id = B_OK;
 	TIOTest* Test = (TIOTest*)instantiate_object(&Archive, &id);
+	CPPUNIT_ASSERT(errno == B_BAD_VALUE);
 	CPPUNIT_ASSERT(Test == NULL);
 	// The system implementation returns the image_id of the last addon searched
 	// Implies the addon is not unloaded.  How to verify this behaviour?  Should
@@ -182,7 +183,7 @@ void TInstantiateObjectTester::Case5()
 	// the team.
 	CPPUNIT_ASSERT(id > 0);
 	unload_add_on(id);
-	CPPUNIT_ASSERT(errno == B_BAD_VALUE);
+
 }
 //------------------------------------------------------------------------------
 

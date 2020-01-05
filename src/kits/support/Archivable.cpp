@@ -720,8 +720,7 @@ instantiate_object(BMessage* archive, image_id* _id)
 		if (instantiationFunc == NULL) {
 			syslog(LOG_ERR, "instantiate_object failed: Failed to find exported "
 				"Instantiate static function for class %s.", className);
-			*status = B_NAME_NOT_FOUND;
-			errno = B_NAME_NOT_FOUND;
+			errno = B_BAD_VALUE;
 			return NULL;
 		}
 	} else if (instantiationFunc == NULL) {
