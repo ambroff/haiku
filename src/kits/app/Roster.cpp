@@ -116,11 +116,9 @@ find_message_app_info(BMessage* message, app_info* info)
 
 /*!	Checks whether or not an application can be used.
 
-	Currently it is only checked whether the application is in the trash.
-
 	\param ref An entry_ref referring to the application executable.
 
-	\return A status code, \c B_OK on success oir other error codes specifying
+	\return A status code, \c B_OK on success or other error codes specifying
 	        why the application cannot be used.
 	\retval B_OK The application can be used.
 	\retval B_ENTRY_NOT_FOUND \a ref doesn't refer to and existing entry.
@@ -320,6 +318,7 @@ compare_queried_apps(const entry_ref* app1, const entry_ref* app2)
 static status_t
 query_for_app(const char* signature, entry_ref* appRef)
 {
+	fprintf(stderr, "KWA: query_for_app(%s, %p)\n", signature, appRef);
 	if (signature == NULL || appRef == NULL)
 		return B_BAD_VALUE;
 
@@ -342,12 +341,20 @@ query_for_app(const char* signature, entry_ref* appRef)
 				continue;
 			}
 
+			char volume_name[1024];
+			volume.GetName(volume_name);			
+			
 			BQuery query;
 			query.SetVolume(&volume);
 			query.PushAttr("BEOS:APP_SIG");
-			if (!caseInsensitive)
+			if (!caseInsensitive) {
 				query.PushString(signature);
-			else {
+
+				fprintf(stderr,
+						"KWA: Searching volume %s for BEOS:APP_SIG=%s\n",
+						volume_name,
+						signature);
+			} else {
 				// second pass, create a case insensitive query string
 				char string[B_MIME_TYPE_LENGTH * 4];
 				strlcpy(string, "application/", sizeof(string));
@@ -368,30 +375,39 @@ query_for_app(const char* signature, entry_ref* appRef)
 
 				to[0] = '\0';
 				query.PushString(string);
+
+				fprintf(stderr,
+						"KWA: Searching volume %s for BEOS:APP_SIG=%s\n",
+						volume_name,
+						string);
 			}
 			query.PushOp(B_EQ);
-
+			
 			query.Fetch();
 
 			// walk through the query
 			bool appFound = false;
 			status_t foundAppError = B_OK;
 			entry_ref ref;
+
 			while (query.GetNextRef(&ref) == B_OK) {
+				fprintf(stderr, "KWA: query result `%s': %s %d, %s\n",
+						ref.name,
+						(appFound ? "YES" : "NO"),
+						0, //compare_queried_apps(appRef, &ref),
+						strerror(can_app_be_used(&ref)));
 				if ((!appFound || compare_queried_apps(appRef, &ref) < 0)
 					&& (foundAppError = can_app_be_used(&ref)) == B_OK) {
 					*appRef = ref;
 					appFound = true;
 				}
 			}
-			if (!appFound) {
-				// If the query didn't return any hits, the error is
-				// B_LAUNCH_FAILED_APP_NOT_FOUND, otherwise we return the
-				// result of the last can_app_be_used().
-				error = foundAppError != B_OK
-					? foundAppError : B_LAUNCH_FAILED_APP_NOT_FOUND;
-			} else
+
+			if (appFound) {
 				return B_OK;
+			} else if (foundAppError) {
+				error = foundAppError;
+			}
 		}
 
 		if (!caseInsensitive)
@@ -400,6 +416,8 @@ query_for_app(const char* signature, entry_ref* appRef)
 			break;
 	}
 
+	fprintf(stderr, "KWA: Returning with error %s\n", strerror(error));
+	
 	return error;
 }
 
@@ -777,6 +795,7 @@ BRoster::GetActiveAppInfo(app_info* info) const
 status_t
 BRoster::FindApp(const char* mimeType, entry_ref* app) const
 {
+	fprintf(stderr, "KWA: FindApp(%s, app)\n", mimeType);
 	if (mimeType == NULL || app == NULL)
 		return B_BAD_VALUE;
 
@@ -2119,6 +2138,8 @@ BRoster::_ResolveApp(const char* inType, entry_ref* ref,
 	entry_ref* _appRef, char* _signature, uint32* _appFlags,
 	bool* _wasDocument) const
 {
+	fprintf(stderr, "BRoster::_ResolveApp(%s, ref, entry_ref, %s, ...)\n",
+			inType, _signature);
 	if ((inType == NULL && ref == NULL)
 		|| (inType != NULL && strlen(inType) >= B_MIME_TYPE_LENGTH))
 		return B_BAD_VALUE;
@@ -2136,6 +2157,7 @@ BRoster::_ResolveApp(const char* inType, entry_ref* ref,
 	} else {
 		error = _TranslateRef(ref, &appMeta, &appRef, &appFile,
 			_wasDocument);
+		fprintf(stderr, "KWA: _TranslateRef() returned %s\n", strerror(error));
 	}
 
 	// create meta mime
@@ -2228,8 +2250,11 @@ status_t
 BRoster::_TranslateRef(entry_ref* ref, BMimeType* appMeta,
 	entry_ref* appRef, BFile* appFile, bool* _wasDocument) const
 {
-	if (ref == NULL || appMeta == NULL || appRef == NULL || appFile == NULL)
+	fprintf(stderr, "BRoster::_TranslateRef(...)\n");
+	
+	if (ref == NULL || appMeta == NULL || appRef == NULL || appFile == NULL) {
 		return B_BAD_VALUE;
+	}
 
 	entry_ref originalRef = *ref;
 
@@ -2368,6 +2393,7 @@ status_t
 BRoster::_TranslateType(const char* mimeType, BMimeType* appMeta,
 	entry_ref* appRef, BFile* appFile) const
 {
+	fprintf(stderr, "BRoster::_TranslateType(%s, ...)\n", mimeType);
 	if (mimeType == NULL || appMeta == NULL || appRef == NULL
 		|| appFile == NULL || strlen(mimeType) >= B_MIME_TYPE_LENGTH) {
 		return B_BAD_VALUE;
@@ -2402,6 +2428,10 @@ BRoster::_TranslateType(const char* mimeType, BMimeType* appMeta,
 		}
 	}
 
+	fprintf(stderr, "KWA: primarySignature=%s, secondarySignature=%s\n",
+			primarySignature,
+			secondarySignature);
+
 	// We will use this BMessage "signatures" to hold all supporting apps
 	// so we can iterator over them in the preferred order. We include
 	// the supporting apps in such a way that the configured preferred
@@ -2421,6 +2451,7 @@ BRoster::_TranslateType(const char* mimeType, BMimeType* appMeta,
 			// case when there is a preferred handler for the sub-type but
 			// it cannot be resolved (misconfiguration).
 			if (secondarySignature[0] != '\0') {
+				fprintf(stderr, "KWA: adding secondary signature for some reason\n");
 				error = signatures.AddString(kSigField, secondarySignature);
 				addedSecondarySignature = true;
 			}
@@ -2524,12 +2555,14 @@ BRoster::_TranslateType(const char* mimeType, BMimeType* appMeta,
 
 		// check, whether the app can be used
 		if (error == B_OK)
-			error = can_app_be_used(appRef);
+			error = can_app_be_used(appRef); // <-- KWA is this necessary?
 
 		if (error == B_OK)
 			break;
 	}
 
+	fprintf(stderr, "Returning from _TranslateType(): %s\n", strerror(error));
+	
 	return error;
 }
 

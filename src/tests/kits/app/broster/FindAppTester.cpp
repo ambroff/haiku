@@ -101,6 +101,7 @@ void
 create_app(const char *filename, const char *signature = NULL,
 		   bool install = false, bool makeExecutable = true)
 {
+	fprintf(stderr, "KWA: creating app %s with signature %s, install=%s\n", filename, signature, install ? "YES" : "NO");
 	system((string("touch ") + filename).c_str());
 	if (makeExecutable)
 		system((string("chmod a+x ") + filename).c_str());
@@ -122,6 +123,7 @@ create_file(const char *filename, const char *type,
 			const char *preferredApp = NULL, const char *appHintPath = NULL,
 			const char *contents = NULL)
 {
+	fprintf(stderr, "KWA: create_file(%s, %s, %s, %s, %s)\n", filename, type, preferredApp, appHintPath, contents);
 	if (contents)
 		system((string("echo -n \"") + contents + "\" > " + filename).c_str());
 	else
@@ -679,11 +681,17 @@ void FindAppTester::FindAppTestB2()
 */
 void FindAppTester::FindAppTestB3()
 {
+	const char *trash_app_file = get_trash_app_file();
+	fprintf(stderr, "KWA: trash_app_file=%s\n", trash_app_file);
+	
 	BRoster roster;
-	create_app(get_trash_app_file(), appType1);
+	create_app(trash_app_file, appType1);
 	entry_ref fileRef(create_file(testFile1, fileType1, appType1));
 	entry_ref ref;
-	CHK(roster.FindApp(&fileRef, &ref) == B_LAUNCH_FAILED_APP_IN_TRASH);
+
+	status_t result = roster.FindApp(&fileRef, &ref);
+	fprintf(stderr, "KWA: FindApp result: %s\n", strerror(result));
+	CHK(result == B_LAUNCH_FAILED_APP_IN_TRASH);
 }
 
 /*
@@ -886,22 +894,22 @@ Test* FindAppTester::Suite()
 {
 	TestSuite* SuiteOfTests = new TestSuite;
 
-	ADD_TEST4(BRoster, SuiteOfTests, FindAppTester, FindAppTestA1);
-	ADD_TEST4(BRoster, SuiteOfTests, FindAppTester, FindAppTestA2);
-	ADD_TEST4(BRoster, SuiteOfTests, FindAppTester, FindAppTestA3);
+	// ADD_TEST4(BRoster, SuiteOfTests, FindAppTester, FindAppTestA1);
+	// ADD_TEST4(BRoster, SuiteOfTests, FindAppTester, FindAppTestA2);
+	// ADD_TEST4(BRoster, SuiteOfTests, FindAppTester, FindAppTestA3);
 
-	ADD_TEST4(BRoster, SuiteOfTests, FindAppTester, FindAppTestB1);
-	ADD_TEST4(BRoster, SuiteOfTests, FindAppTester, FindAppTestB2);
+	// ADD_TEST4(BRoster, SuiteOfTests, FindAppTester, FindAppTestB1);
+	// ADD_TEST4(BRoster, SuiteOfTests, FindAppTester, FindAppTestB2);
 	ADD_TEST4(BRoster, SuiteOfTests, FindAppTester, FindAppTestB3);
-	ADD_TEST4(BRoster, SuiteOfTests, FindAppTester, FindAppTestB4);
-	ADD_TEST4(BRoster, SuiteOfTests, FindAppTester, FindAppTestB5);
-	ADD_TEST4(BRoster, SuiteOfTests, FindAppTester, FindAppTestB6);
-	ADD_TEST4(BRoster, SuiteOfTests, FindAppTester, FindAppTestB7);
-	ADD_TEST4(BRoster, SuiteOfTests, FindAppTester, FindAppTestB8);
-	ADD_TEST4(BRoster, SuiteOfTests, FindAppTester, FindAppTestB9);
-	ADD_TEST4(BRoster, SuiteOfTests, FindAppTester, FindAppTestB10);
-	ADD_TEST4(BRoster, SuiteOfTests, FindAppTester, FindAppTestB11);
-	ADD_TEST4(BRoster, SuiteOfTests, FindAppTester, FindAppTestB12);
+	// ADD_TEST4(BRoster, SuiteOfTests, FindAppTester, FindAppTestB4);
+	// ADD_TEST4(BRoster, SuiteOfTests, FindAppTester, FindAppTestB5);
+	// ADD_TEST4(BRoster, SuiteOfTests, FindAppTester, FindAppTestB6);
+	// ADD_TEST4(BRoster, SuiteOfTests, FindAppTester, FindAppTestB7);
+	// ADD_TEST4(BRoster, SuiteOfTests, FindAppTester, FindAppTestB8);
+	// ADD_TEST4(BRoster, SuiteOfTests, FindAppTester, FindAppTestB9);
+	// ADD_TEST4(BRoster, SuiteOfTests, FindAppTester, FindAppTestB10);
+	// ADD_TEST4(BRoster, SuiteOfTests, FindAppTester, FindAppTestB11);
+	// ADD_TEST4(BRoster, SuiteOfTests, FindAppTester, FindAppTestB12);
 
 	return SuiteOfTests;
 }
