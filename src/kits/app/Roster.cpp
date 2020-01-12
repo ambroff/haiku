@@ -2341,12 +2341,16 @@ BRoster::_TranslateRef(entry_ref* ref, BMimeType* appMeta,
 	// if the file has a preferred app, let _TranslateType() find
 	// it for us
 	char preferredApp[B_MIME_TYPE_LENGTH];
-	if (nodeInfo.GetPreferredApp(preferredApp) == B_OK
-		&& _TranslateType(preferredApp, appMeta, appRef, appFile) == B_OK) {
-		if (_wasDocument != NULL)
-			*_wasDocument = true;
+	if (nodeInfo.GetPreferredApp(preferredApp) == B_OK) {
+		error = _TranslateType(preferredApp, appMeta, appRef, appFile);
+		if (error == B_OK) {
+			if (_wasDocument != NULL)
+				*_wasDocument = true;
 
-		return B_OK;
+			return B_OK;
+		}
+
+		fprintf(stderr, "KWA: TranslateType returned %s\n", strerror(error));
 	}
 
 	// no preferred app or existing one was not found -- we
@@ -2354,19 +2358,24 @@ BRoster::_TranslateRef(entry_ref* ref, BMimeType* appMeta,
 
 	// get the type from the file
 	char fileType[B_MIME_TYPE_LENGTH];
-	error = _GetFileType(ref, &nodeInfo, fileType);
-	if (error != B_OK)
+	status_t second_try_error = _GetFileType(ref, &nodeInfo, fileType);
+	if (second_try_error != B_OK)
 		return error;
 
 	// now let _TranslateType() do the actual work
-	error = _TranslateType(fileType, appMeta, appRef, appFile);
-	if (error != B_OK)
+	second_try_error = _TranslateType(fileType, appMeta, appRef, appFile);
+	if (second_try_error == B_OK) {
+		if (_wasDocument != NULL)
+			*_wasDocument = true;
+
+		return B_OK;
+	}
+
+	if (error == B_LAUNCH_FAILED_APP_IN_TRASH) {
 		return error;
-
-	if (_wasDocument != NULL)
-		*_wasDocument = true;
-
-	return B_OK;
+	} else {
+		return second_try_error;
+	}
 }
 
 
