@@ -89,11 +89,11 @@ BasicTest::createVolume(string imageFile, string mountPoint, int32 megs,
 						bool makeMountPoint)
 {
 	char megsString[16];
-	sprintf(megsString, "%ld", megs);
+	sprintf(megsString, "%d", megs);
 	execCommand(string("dd if=/dev/zero of=") + imageFile
 					+ " bs=1M count=" + megsString
 					+ " &> /dev/null"
-				+ " ; mkbfs " + imageFile
+				+ " ; mkfs -q -t bfs " + imageFile
 					+ " > /dev/null"
 				+ " ; sync"
 				+ (makeMountPoint ? " ; mkdir " + mountPoint : "")
