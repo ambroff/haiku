@@ -83,7 +83,7 @@ VolumeTest::setUp()
 		string("mkdir ") + testDir
 	);
 	// create and mount image
-	createVolume(testFile1, testMountPoint, 1);
+	createVolume(testFile1, testMountPoint, 10);
 	// create app
 	fApplication = new BTestApp("application/x-vnd.obos.volume-test");
 	if (fApplication->Init() != B_OK) {
@@ -585,7 +585,7 @@ VolumeTest::WatchingTest()
 	CHK(BDirectory(testMountPoint).GetNodeRef(&nodeRef) == B_OK);
 	// mount volume
 	NextSubTest();
-	createVolume(testFile1, testMountPoint, 1, false);
+	createVolume(testFile1, testMountPoint, 10, false);
 	CHK(roster.Messenger() == target);
 	device = dev_for_path(testMountPoint);
 	CHK(device >= 0);
@@ -602,7 +602,7 @@ VolumeTest::WatchingTest()
 	CheckWatchingMessage(false, device, *handler2);
 	// mount volume
 	NextSubTest();
-	createVolume(testFile1, testMountPoint, 1, false);
+	createVolume(testFile1, testMountPoint, 10, false);
 	CHK(roster.Messenger() == target2);
 	device = dev_for_path(testMountPoint);
 	CHK(device >= 0);
@@ -614,7 +614,7 @@ VolumeTest::WatchingTest()
 	// unmount, mount volume
 	NextSubTest();
 	deleteVolume(testFile1, testMountPoint, false);
-	createVolume(testFile1, testMountPoint, 1, false);
+	createVolume(testFile1, testMountPoint, 10, false);
 	snooze(100000);
 	CHK(fApplication->Handler().Queue().IsEmpty());
 	CHK(handler2->Queue().IsEmpty());

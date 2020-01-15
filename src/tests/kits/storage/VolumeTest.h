@@ -10,7 +10,6 @@
 
 class BTestApp;
 class BBitmap;
-class CppUnit::Test;
 class TestHandler;
 
 class VolumeTest : public BasicTest

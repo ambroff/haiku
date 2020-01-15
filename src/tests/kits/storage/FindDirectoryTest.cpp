@@ -86,7 +86,7 @@ void
 FindDirectoryTest::setUp()
 {
 	BasicTest::setUp();
-	createVolume(testFile, testMountPoint, 1);
+	createVolume(testFile, testMountPoint, 10);
 }
 	
 // tearDown
