@@ -79,6 +79,7 @@ VolumeTest::setUp()
 {
 	BasicTest::setUp();
 	// create test dir and files
+	execCommand(string("rm -rf ") + testDir);
 	execCommand(
 		string("mkdir ") + testDir
 	);
