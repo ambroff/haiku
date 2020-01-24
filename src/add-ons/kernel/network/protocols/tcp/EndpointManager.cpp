@@ -21,7 +21,7 @@
 #include "TCPEndpoint.h"
 
 
-//#define TRACE_ENDPOINT_MANAGER
+#define TRACE_ENDPOINT_MANAGER
 #ifdef TRACE_ENDPOINT_MANAGER
 #	define TRACE(x) dprintf x
 #else
@@ -160,6 +160,7 @@ bool
 ConnectionHashDefinition::Compare(const KeyType& key,
 	TCPEndpoint* endpoint) const
 {
+	//TRACE(("ConnectionHashDefinition::Compare((%p,%p), %p)\n", key.first, key.second, endpoint));
 	return endpoint->LocalAddress().EqualTo(key.first, true)
 		&& endpoint->PeerAddress().EqualTo(key.second, true);
 }
@@ -251,6 +252,7 @@ EndpointManager::Init()
 TCPEndpoint*
 EndpointManager::_LookupConnection(const sockaddr* local, const sockaddr* peer)
 {
+	TRACE(("EndpointManager::_LookupConnection(%p, %p)\n", local, peer));
 	return fConnectionHash.Lookup(std::make_pair(local, peer));
 }
 
@@ -314,6 +316,7 @@ EndpointManager::SetPassive(TCPEndpoint* endpoint)
 TCPEndpoint*
 EndpointManager::FindConnection(sockaddr* local, sockaddr* peer)
 {
+	TRACE(("EndpointManager::FindConnection(%p, %p)\n", local, peer));
 	ReadLocker _(fLock);
 
 	TCPEndpoint *endpoint = _LookupConnection(local, peer);
@@ -362,6 +365,7 @@ EndpointManager::FindConnection(sockaddr* local, sockaddr* peer)
 status_t
 EndpointManager::Bind(TCPEndpoint* endpoint, const sockaddr* address)
 {
+	TRACE(("EndpointManager::Bind(%p, %p)\n", endpoint, address));
 	// check the family
 	if (!AddressModule()->is_same_family(address))
 		return EAFNOSUPPORT;
@@ -388,6 +392,7 @@ status_t
 EndpointManager::_BindToAddress(WriteLocker& locker, TCPEndpoint* endpoint,
 	const sockaddr* _address)
 {
+	TRACE(("EndpointManager::_BindToAddress(locker, %p)\n", endpoint));
 	ConstSocketAddress address(AddressModule(), _address);
 	uint16 port = address.Port();
 
@@ -477,7 +482,10 @@ EndpointManager::_BindToEphemeral(TCPEndpoint* endpoint,
 					true).Data()));
 				T(Bind(endpoint, newAddress, true));
 
-				return _Bind(endpoint, *newAddress);
+				status_t status = _Bind(endpoint, *newAddress);
+				TRACE(("EndpointManager::_BindToEphemeral(%p, %p) bound port %d and is returning status %s\n",
+					   endpoint, address, ntohs(port), strerror(status)));
+				return status;
 			}
 
 			counter += step;
@@ -492,6 +500,7 @@ EndpointManager::_BindToEphemeral(TCPEndpoint* endpoint,
 status_t
 EndpointManager::_Bind(TCPEndpoint* endpoint, const sockaddr* address)
 {
+	TRACE(("EndpointManager::_Bind(%p, %p)\n", endpoint, address));
 	// Thus far we have checked if the Bind() is allowed
 
 	status_t status = endpoint->next->module->bind(endpoint->next, address);
@@ -562,6 +571,7 @@ EndpointManager::ReplyWithReset(tcp_segment_header& segment, net_buffer* buffer)
 	if (status != B_OK)
 		gBufferModule->free(reply);
 
+	TRACE(("TCP: RST sent with status %s...\n", strerror(status)));
 	return status;
 }
 
@@ -573,6 +583,7 @@ EndpointManager::Dump() const
 	kprintf("%10s %21s %21s %8s %8s %12s\n", "address", "local", "peer",
 		"recv-q", "send-q", "state");
 
+	kprintf("\nACCORDING TO CONNECTION_HASH\n");
 	ConnectionTable::Iterator iterator = fConnectionHash.GetIterator();
 
 	while (iterator.HasNext()) {
@@ -585,6 +596,22 @@ EndpointManager::Dump() const
 		kprintf("%p %21s %21s %8lu %8lu %12s\n", endpoint, localBuf, peerBuf,
 			endpoint->fReceiveQueue.Available(), endpoint->fSendQueue.Used(),
 			name_for_state(endpoint->State()));
+	}
+
+	kprintf("\nACCORDING TO ENDPOINT_HASH\n");
+	EndpointTable::Iterator endpoint_iterator = fEndpointHash.GetIterator();
+	while (endpoint_iterator.HasNext()) {
+		TCPEndpoint *endpoint = endpoint_iterator.Next();
+		char localBuf[64], peerBuf[64];
+		endpoint->LocalAddress().AsString(localBuf, sizeof(localBuf),
+										  true);
+		endpoint->PeerAddress().AsString(peerBuf, sizeof(peerBuf),
+										 true);
+
+		kprintf("%p %21s %21s %8lu %8lu %12s\n", endpoint, localBuf,
+				peerBuf, endpoint->fReceiveQueue.Available(),
+				endpoint->fSendQueue.Used(),
+				name_for_state(endpoint->State()));
 	}
 }
 

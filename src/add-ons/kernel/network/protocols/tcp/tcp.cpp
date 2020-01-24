@@ -708,16 +708,24 @@ tcp_receive_data(net_buffer* buffer)
 
 	TCPEndpoint* endpoint = endpointManager->FindConnection(
 		buffer->destination, buffer->source);
+
 	if (endpoint != NULL) {
 		segmentAction = endpoint->SegmentReceived(segment, buffer);
 		gSocketModule->release_socket(endpoint->socket);
 	} else if ((segment.flags & TCP_FLAG_RESET) == 0)
 		segmentAction = DROP | RESET;
 
+	TRACE(("KWA about to crash: endpoint=%p, segmentAction=%d, buffer=%p\n"));
+
+	// KWA TODO: This is likely the fix for this KDL
+	//if ((segmentAction & RESET) != 0 && endpoint != NULL) {
 	if ((segmentAction & RESET) != 0) {
 		// send reset
+		TRACE(("tcp_receive_data(): EndpointManager::FindConnection() returned NULL for endpoint %p, replying with RST\n",
+			   endpoint));
 		endpointManager->ReplyWithReset(segment, buffer);
 	}
+	
 	if ((segmentAction & DROP) != 0)
 		gBufferModule->free(buffer);
 

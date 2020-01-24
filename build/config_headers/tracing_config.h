@@ -5,7 +5,7 @@
 
 // enable tracing (0/1)
 #ifndef ENABLE_TRACING
-#	define ENABLE_TRACING 0
+#	define ENABLE_TRACING 1
 #endif
 
 // tracing buffer size (in bytes)
@@ -56,7 +56,7 @@
 #define SWAP_TRACING							0
 #define SYSCALL_TRACING							0
 #define SYSCALL_TRACING_IGNORE_KTRACE_OUTPUT	1
-#define TCP_TRACING								0
+#define TCP_TRACING								1
 #define TEAM_TRACING							0
 #define TRANSLATION_MAP_TRACING					0
 #define TRANSLATION_MAP_TRACING_STACK_TRACE		0	/* stack trace depth */
