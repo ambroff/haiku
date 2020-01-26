@@ -470,9 +470,9 @@ TCPEndpoint::TCPEndpoint(net_socket* socket)
 	T(APICall(this, "constructor"));
 }
 
-
 TCPEndpoint::~TCPEndpoint()
 {
+	panic("Destroying TCPEndpoint %p\n", this);
 	mutex_lock(&fLock);
 
 	T(APICall(this, "destructor"));

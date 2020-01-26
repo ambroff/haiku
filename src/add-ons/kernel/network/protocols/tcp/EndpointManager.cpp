@@ -261,6 +261,7 @@ status_t
 EndpointManager::SetConnection(TCPEndpoint* endpoint, const sockaddr* _local,
 	const sockaddr* peer, const sockaddr* interfaceLocal)
 {
+	panic("SetConnection(%p)\n", endpoint);
 	TRACE("EndpointManager::SetConnection(%p)\n", endpoint);
 
 	WriteLocker _(fLock);
@@ -282,6 +283,8 @@ EndpointManager::SetConnection(TCPEndpoint* endpoint, const sockaddr* _local,
 	T(Connect(endpoint));
 
 	fConnectionHash.Insert(endpoint);
+
+	panic("Finished SetConnection(%p)\n", endpoint);
 	return B_OK;
 }
 
@@ -289,6 +292,7 @@ EndpointManager::SetConnection(TCPEndpoint* endpoint, const sockaddr* _local,
 status_t
 EndpointManager::SetPassive(TCPEndpoint* endpoint)
 {
+	panic("SetPassive(%p)\n", endpoint);
 	TRACE("EndpointManager::SetPassive(%p)\n", endpoint);
 
 	WriteLocker _(fLock);
@@ -535,6 +539,8 @@ EndpointManager::Unbind(TCPEndpoint* endpoint)
 
 	(*endpoint->LocalAddress())->sa_len = 0;
 
+	panic("TCPEndpoint %p should be removed from endpoint manager", this);
+	
 	return B_OK;
 }
 
