@@ -31,11 +31,11 @@
 #include <NetUtilities.h>
 
 
-//#define TRACE_TCP
+#define TRACE_TCP
 #ifdef TRACE_TCP
-#	define TRACE(x) dprintf x
+#	define TRACE(x...) dprintf(x)
 #else
-#	define TRACE(x)
+#	define TRACE(x...)
 #endif
 
 
@@ -402,9 +402,9 @@ add_tcp_header(net_address_module_info* addressModule,
 			optionsLength);
 	}
 
-	TRACE(("add_tcp_header(): buffer %p, flags 0x%x, seq %lu, ack %lu, up %u, "
+	TRACE("add_tcp_header(): buffer %p, flags 0x%x, seq %d, ack %d, up %u, "
 		"win %u\n", buffer, segment.flags, segment.sequence,
-		segment.acknowledge, segment.urgent_offset, segment.advertised_window));
+		segment.acknowledge, segment.urgent_offset, segment.advertised_window);
 
 	*TCPChecksumField(buffer) = Checksum::PseudoHeader(addressModule,
 		gBufferModule, buffer, IPPROTO_TCP);
@@ -450,6 +450,7 @@ tcp_options_length(tcp_segment_header& segment)
 net_protocol*
 tcp_init_protocol(net_socket* socket)
 {
+	TRACE("KWA tcp_init_protocol(%p)\n", socket);
 	socket->send.buffer_size = 32768;
 		// override net_socket default
 
@@ -462,7 +463,7 @@ tcp_init_protocol(net_socket* socket)
 		return NULL;
 	}
 
-	TRACE(("Creating new TCPEndpoint: %p\n", protocol));
+	TRACE("Creating new TCPEndpoint: %p\n", protocol);
 	socket->protocol = IPPROTO_TCP;
 	return protocol;
 }
@@ -471,7 +472,8 @@ tcp_init_protocol(net_socket* socket)
 status_t
 tcp_uninit_protocol(net_protocol* protocol)
 {
-	TRACE(("Deleting TCPEndpoint: %p\n", protocol));
+	TRACE("KWA tcp_uninit_protocol(%p)\n", protocol);
+	TRACE("Deleting TCPEndpoint: %p\n", protocol);
 	delete (TCPEndpoint*)protocol;
 	return B_OK;
 }
@@ -480,6 +482,7 @@ tcp_uninit_protocol(net_protocol* protocol)
 status_t
 tcp_open(net_protocol* protocol)
 {
+	TRACE("KWA tcp_open(%p)\n", protocol);
 	return ((TCPEndpoint*)protocol)->Open();
 }
 
@@ -487,14 +490,16 @@ tcp_open(net_protocol* protocol)
 status_t
 tcp_close(net_protocol* protocol)
 {
-	return ((TCPEndpoint*)protocol)->Close();
+	TRACE("KWA tcp_close(%p)\n", protocol);
+	return ((TCPEndpoint *)protocol)->Close();
 }
 
 
 status_t
 tcp_free(net_protocol* protocol)
 {
-	((TCPEndpoint*)protocol)->Free();
+	TRACE("KWA tcp_free(%p)\n", protocol);
+	((TCPEndpoint *)protocol)->Free();
 	return B_OK;
 }
 
@@ -502,14 +507,16 @@ tcp_free(net_protocol* protocol)
 status_t
 tcp_connect(net_protocol* protocol, const struct sockaddr* address)
 {
-	return ((TCPEndpoint*)protocol)->Connect(address);
+	TRACE("KWA tcp_connect(%p, %d)\n", protocol, address->sa_family);
+	return ((TCPEndpoint *)protocol)->Connect(address);
 }
 
 
 status_t
 tcp_accept(net_protocol* protocol, struct net_socket** _acceptedSocket)
 {
-	return ((TCPEndpoint*)protocol)->Accept(_acceptedSocket);
+	TRACE("KWA tcp_accept(%p, accepted_socket)\n", protocol);
+	return ((TCPEndpoint *)protocol)->Accept(_acceptedSocket);
 }
 
 
@@ -517,11 +524,12 @@ status_t
 tcp_control(net_protocol* _protocol, int level, int option, void* value,
 	size_t* _length)
 {
-	TCPEndpoint* protocol = (TCPEndpoint*)_protocol;
+	TRACE("KWA tcp_control(%p, %d, %d, value, length)\n", _protocol, level, option);
+	TCPEndpoint *protocol = (TCPEndpoint *)_protocol;
 
 	if ((level & LEVEL_MASK) == IPPROTO_TCP) {
 		if (option == NET_STAT_SOCKET)
-			return protocol->FillStat((net_stat*)value);
+			return protocol->FillStat((net_stat *)value);
 	}
 
 	return protocol->next->module->control(protocol->next, level, option,
@@ -533,7 +541,9 @@ status_t
 tcp_getsockopt(net_protocol* _protocol, int level, int option, void* value,
 	int* _length)
 {
-	TCPEndpoint* protocol = (TCPEndpoint*)_protocol;
+	TRACE("KWA tcp_getsockopt(%p, %d, %d, value, length)\n", _protocol, level,
+		  option);
+	TCPEndpoint *protocol = (TCPEndpoint *)_protocol;
 
 	if (level == IPPROTO_TCP)
 		return protocol->GetOption(option, value, _length);
@@ -547,35 +557,39 @@ status_t
 tcp_setsockopt(net_protocol* _protocol, int level, int option,
 	const void* _value, int length)
 {
-	TCPEndpoint* protocol = (TCPEndpoint*)_protocol;
+	TRACE("KWA tcp_setsockopt(%p, %d, %d, value, length)\n", _protocol, level,
+		  option);
+
+	TCPEndpoint *protocol = (TCPEndpoint *)_protocol;
 
 	if (level == SOL_SOCKET) {
 		if (option == SO_SNDBUF || option == SO_RCVBUF) {
 			if (length != sizeof(int))
 				return B_BAD_VALUE;
-
+			
 			status_t status;
-			const int* value = (const int*)_value;
-
+			const int *value = (const int *)_value;
+			
 			if (option == SO_SNDBUF)
 				status = protocol->SetSendBufferSize(*value);
 			else
 				status = protocol->SetReceiveBufferSize(*value);
-
+			
 			if (status < B_OK)
 				return status;
 		}
 	} else if (level == IPPROTO_TCP)
 		return protocol->SetOption(option, _value, length);
-
+	
 	return protocol->next->module->setsockopt(protocol->next, level, option,
-		_value, length);
+											  _value, length);
 }
 
 
 status_t
 tcp_bind(net_protocol* protocol, const struct sockaddr* address)
 {
+	TRACE("KWA tcp_bind(%p, %p)\n", protocol, address);
 	return ((TCPEndpoint*)protocol)->Bind(address);
 }
 
@@ -583,28 +597,32 @@ tcp_bind(net_protocol* protocol, const struct sockaddr* address)
 status_t
 tcp_unbind(net_protocol* protocol, struct sockaddr* address)
 {
-	return ((TCPEndpoint*)protocol)->Unbind(address);
+	TRACE("KWA tcp_unbind(%p, %p)\n", protocol, address);
+	return ((TCPEndpoint *)protocol)->Unbind(address);
 }
 
 
 status_t
 tcp_listen(net_protocol* protocol, int count)
 {
-	return ((TCPEndpoint*)protocol)->Listen(count);
+	TRACE("KWA tcp_listen(%p, %d)\n", protocol, count);
+	return ((TCPEndpoint *)protocol)->Listen(count);
 }
 
 
 status_t
 tcp_shutdown(net_protocol* protocol, int direction)
 {
-	return ((TCPEndpoint*)protocol)->Shutdown(direction);
+	TRACE("KWA tcp_shutdown(%p, %d)\n", protocol, direction);
+	return ((TCPEndpoint *)protocol)->Shutdown(direction);
 }
 
 
 status_t
 tcp_send_data(net_protocol* protocol, net_buffer* buffer)
 {
-	return ((TCPEndpoint*)protocol)->SendData(buffer);
+	TRACE("KWA tcp_send_data(%p, %p)\n", protocol, buffer);
+	return ((TCPEndpoint *)protocol)->SendData(buffer);
 }
 
 
@@ -612,6 +630,7 @@ status_t
 tcp_send_routed_data(net_protocol* protocol, struct net_route* route,
 	net_buffer* buffer)
 {
+	TRACE("KWA tcp_send_routed_data(%p, %p, %p)\n", protocol, route, buffer);
 	// TCP never sends routed data
 	return B_ERROR;
 }
@@ -620,7 +639,8 @@ tcp_send_routed_data(net_protocol* protocol, struct net_route* route,
 ssize_t
 tcp_send_avail(net_protocol* protocol)
 {
-	return ((TCPEndpoint*)protocol)->SendAvailable();
+	TRACE("KWA tcp_send_avail(%p)\n", protocol);
+	return ((TCPEndpoint *)protocol)->SendAvailable();
 }
 
 
@@ -628,20 +648,23 @@ status_t
 tcp_read_data(net_protocol* protocol, size_t numBytes, uint32 flags,
 	net_buffer** _buffer)
 {
-	return ((TCPEndpoint*)protocol)->ReadData(numBytes, flags, _buffer);
+	TRACE("KWA tcp_read_data(%p, %ld, %d, buffer)\n", protocol, numBytes, flags);
+	return ((TCPEndpoint *)protocol)->ReadData(numBytes, flags, _buffer);
 }
 
 
 ssize_t
 tcp_read_avail(net_protocol* protocol)
 {
-	return ((TCPEndpoint*)protocol)->ReadAvailable();
+	TRACE("KWA tcp_read_avail(%p)\n", protocol);
+	return ((TCPEndpoint *)protocol)->ReadAvailable();
 }
 
 
 struct net_domain*
 tcp_get_domain(net_protocol* protocol)
 {
+	TRACE("KWA tcp_get_domain(%p)\n", protocol);
 	return protocol->next->module->get_domain(protocol->next);
 }
 
@@ -649,6 +672,7 @@ tcp_get_domain(net_protocol* protocol)
 size_t
 tcp_get_mtu(net_protocol* protocol, const struct sockaddr* address)
 {
+	TRACE("KWA tcp_get_mtu(%p, %p)\n", protocol, address);
 	return protocol->next->module->get_mtu(protocol->next, address);
 }
 
@@ -656,7 +680,7 @@ tcp_get_mtu(net_protocol* protocol, const struct sockaddr* address)
 status_t
 tcp_receive_data(net_buffer* buffer)
 {
-	TRACE(("TCP: Received buffer %p\n", buffer));
+	TRACE("KWA tcp_receive_data(%p)\n", buffer);
 
 	if (buffer->interface_address == NULL
 		|| buffer->interface_address->domain == NULL)
@@ -682,9 +706,9 @@ tcp_receive_data(net_buffer* buffer)
 	addressModule->set_port(buffer->source, header.source_port);
 	addressModule->set_port(buffer->destination, header.destination_port);
 
-	TRACE(("  Looking for: peer %s, local %s\n",
+	TRACE("  Looking for: peer %s, local %s\n",
 		AddressString(domain, buffer->source, true).Data(),
-		AddressString(domain, buffer->destination, true).Data()));
+		AddressString(domain, buffer->destination, true).Data());
 	//dump_tcp_header(header);
 	//gBufferModule->dump(buffer);
 
@@ -700,7 +724,7 @@ tcp_receive_data(net_buffer* buffer)
 
 	EndpointManager* endpointManager = endpoint_manager_for(domain);
 	if (endpointManager == NULL) {
-		TRACE(("  No endpoint manager!\n"));
+		TRACE("  No endpoint manager!\n");
 		return B_ERROR;
 	}
 
@@ -715,14 +739,14 @@ tcp_receive_data(net_buffer* buffer)
 	} else if ((segment.flags & TCP_FLAG_RESET) == 0)
 		segmentAction = DROP | RESET;
 
-	TRACE(("KWA about to crash: endpoint=%p, segmentAction=%d, buffer=%p\n"));
+	TRACE("KWA about to crash: endpoint=%p, segmentAction=%d, buffer=%p\n", endpoint, segmentAction, buffer);
 
 	// KWA TODO: This is likely the fix for this KDL
 	//if ((segmentAction & RESET) != 0 && endpoint != NULL) {
 	if ((segmentAction & RESET) != 0) {
 		// send reset
-		TRACE(("tcp_receive_data(): EndpointManager::FindConnection() returned NULL for endpoint %p, replying with RST\n",
-			   endpoint));
+		TRACE("tcp_receive_data(): EndpointManager::FindConnection() returned NULL for endpoint %p, replying with RST\n",
+			   endpoint);
 		endpointManager->ReplyWithReset(segment, buffer);
 	}
 	
@@ -736,6 +760,7 @@ tcp_receive_data(net_buffer* buffer)
 status_t
 tcp_error_received(net_error error, net_buffer* data)
 {
+	TRACE("KWA tcp_error_received(%d, data)\n", error);
 	return B_ERROR;
 }
 
@@ -744,6 +769,7 @@ status_t
 tcp_error_reply(net_protocol* protocol, net_buffer* cause, net_error error,
 	net_error_data* errorData)
 {
+	TRACE("KWA tcp_error_reply(%p, cause, %d, errorData)\n", protocol, error);
 	return B_ERROR;
 }
 
@@ -754,6 +780,7 @@ tcp_error_reply(net_protocol* protocol, net_buffer* cause, net_error error,
 static status_t
 tcp_init()
 {
+	TRACE("KWA tcp_init()\n");
 	rw_lock_init(&sEndpointManagersLock, "endpoint managers");
 
 	status_t status = gStackModule->register_domain_protocols(AF_INET,
@@ -807,6 +834,7 @@ tcp_init()
 static status_t
 tcp_uninit()
 {
+	TRACE("KWA tcp_uninit()\n");
 	remove_debugger_command("tcp_endpoint", dump_endpoint);
 	remove_debugger_command("tcp_endpoints", dump_endpoints);
 

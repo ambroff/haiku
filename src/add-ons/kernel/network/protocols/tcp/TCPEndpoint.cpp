@@ -482,6 +482,7 @@ TCPEndpoint::~TCPEndpoint()
 	T(TimerSet(this, "time-wait", -1));
 
 	if (fManager != NULL) {
+		TRACE(("KWA: Calling fManager->Unbind(%p) from ~TCPEndpoint\n", this));
 		fManager->Unbind(this);
 		put_endpoint_manager(fManager);
 	}
@@ -511,7 +512,7 @@ TCPEndpoint::InitCheck() const
 status_t
 TCPEndpoint::Open()
 {
-	TRACE("Open()");
+	TRACE("Open(%p)", this);
 	T(APICall(this, "open"));
 
 	status_t status = ProtocolSocket::Open();
@@ -531,7 +532,7 @@ TCPEndpoint::Close()
 {
 	MutexLocker locker(fLock);
 
-	TRACE("Close()");
+	TRACE("Close(%p)", this);
 	T(APICall(this, "close"));
 
 	if (fState == LISTEN)
@@ -1451,7 +1452,7 @@ TCPEndpoint::_Spawn(TCPEndpoint* parent, tcp_segment_header& segment,
 {
 	MutexLocker _(fLock);
 
-	// TODO error checking
+	// KWA: TODO error checking
 	ProtocolSocket::Open();
 
 	fState = SYNCHRONIZE_RECEIVED;
@@ -1464,7 +1465,7 @@ TCPEndpoint::_Spawn(TCPEndpoint* parent, tcp_segment_header& segment,
 
 	TRACE("Spawn()");
 
-	// TODO: proper error handling!
+	// KWA TODO: proper error handling!
 	if (fManager->BindChild(this) != B_OK) {
 		T(Error(this, "binding failed", __LINE__));
 		return DROP;

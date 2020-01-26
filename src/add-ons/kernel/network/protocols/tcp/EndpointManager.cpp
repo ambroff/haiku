@@ -23,7 +23,7 @@
 
 #define TRACE_ENDPOINT_MANAGER
 #ifdef TRACE_ENDPOINT_MANAGER
-#	define TRACE(x) dprintf x
+#	define TRACE(x...) dprintf(x)
 #else
 #	define TRACE(x)
 #endif
@@ -252,7 +252,7 @@ EndpointManager::Init()
 TCPEndpoint*
 EndpointManager::_LookupConnection(const sockaddr* local, const sockaddr* peer)
 {
-	TRACE(("EndpointManager::_LookupConnection(%p, %p)\n", local, peer));
+	TRACE("EndpointManager::_LookupConnection(%p, %p)\n", local, peer);
 	return fConnectionHash.Lookup(std::make_pair(local, peer));
 }
 
@@ -261,7 +261,7 @@ status_t
 EndpointManager::SetConnection(TCPEndpoint* endpoint, const sockaddr* _local,
 	const sockaddr* peer, const sockaddr* interfaceLocal)
 {
-	TRACE(("EndpointManager::SetConnection(%p)\n", endpoint));
+	TRACE("EndpointManager::SetConnection(%p)\n", endpoint);
 
 	WriteLocker _(fLock);
 
@@ -289,6 +289,8 @@ EndpointManager::SetConnection(TCPEndpoint* endpoint, const sockaddr* _local,
 status_t
 EndpointManager::SetPassive(TCPEndpoint* endpoint)
 {
+	TRACE("EndpointManager::SetPassive(%p)\n", endpoint);
+
 	WriteLocker _(fLock);
 
 	if (!endpoint->IsBound()) {
@@ -316,13 +318,13 @@ EndpointManager::SetPassive(TCPEndpoint* endpoint)
 TCPEndpoint*
 EndpointManager::FindConnection(sockaddr* local, sockaddr* peer)
 {
-	TRACE(("EndpointManager::FindConnection(%p, %p)\n", local, peer));
+	TRACE("EndpointManager::FindConnection(%p, %p)\n", local, peer);
 	ReadLocker _(fLock);
 
 	TCPEndpoint *endpoint = _LookupConnection(local, peer);
 	if (endpoint != NULL) {
-		TRACE(("TCP: Received packet corresponds to explicit endpoint %p\n",
-			endpoint));
+		TRACE("TCP: Received packet corresponds to explicit endpoint %p\n",
+			endpoint);
 		if (gSocketModule->acquire_socket(endpoint->socket))
 			return endpoint;
 	}
@@ -334,8 +336,8 @@ EndpointManager::FindConnection(sockaddr* local, sockaddr* peer)
 
 	endpoint = _LookupConnection(local, *wildcard);
 	if (endpoint != NULL) {
-		TRACE(("TCP: Received packet corresponds to wildcard endpoint %p\n",
-			endpoint));
+		TRACE("TCP: Received packet corresponds to wildcard endpoint %p\n",
+			endpoint);
 		if (gSocketModule->acquire_socket(endpoint->socket))
 			return endpoint;
 	}
@@ -346,14 +348,14 @@ EndpointManager::FindConnection(sockaddr* local, sockaddr* peer)
 
 	endpoint = _LookupConnection(*localWildcard, *wildcard);
 	if (endpoint != NULL) {
-		TRACE(("TCP: Received packet corresponds to local wildcard endpoint "
-			"%p\n", endpoint));
+		TRACE("TCP: Received packet corresponds to local wildcard endpoint "
+			"%p\n", endpoint);
 		if (gSocketModule->acquire_socket(endpoint->socket))
 			return endpoint;
 	}
 
 	// no matching endpoint exists
-	TRACE(("TCP: no matching endpoint!\n"));
+	TRACE("TCP: no matching endpoint!\n");
 
 	return NULL;
 }
@@ -365,7 +367,7 @@ EndpointManager::FindConnection(sockaddr* local, sockaddr* peer)
 status_t
 EndpointManager::Bind(TCPEndpoint* endpoint, const sockaddr* address)
 {
-	TRACE(("EndpointManager::Bind(%p, %p)\n", endpoint, address));
+	TRACE("EndpointManager::Bind(%p, %p)\n", endpoint, address);
 	// check the family
 	if (!AddressModule()->is_same_family(address))
 		return EAFNOSUPPORT;
@@ -392,11 +394,11 @@ status_t
 EndpointManager::_BindToAddress(WriteLocker& locker, TCPEndpoint* endpoint,
 	const sockaddr* _address)
 {
-	TRACE(("EndpointManager::_BindToAddress(locker, %p)\n", endpoint));
+	TRACE("EndpointManager::_BindToAddress(locker, %p)\n", endpoint);
 	ConstSocketAddress address(AddressModule(), _address);
 	uint16 port = address.Port();
 
-	TRACE(("EndpointManager::BindToAddress(%p)\n", endpoint));
+	TRACE("EndpointManager::BindToAddress(%p)\n", endpoint);
 	T(Bind(endpoint, address, false));
 
 	// TODO: this check follows very typical UNIX semantics
@@ -454,7 +456,7 @@ status_t
 EndpointManager::_BindToEphemeral(TCPEndpoint* endpoint,
 	const sockaddr* address)
 {
-	TRACE(("EndpointManager::BindToEphemeral(%p)\n", endpoint));
+	TRACE("EndpointManager::BindToEphemeral(%p)\n", endpoint);
 
 	uint32 max = fLastPort + 65536;
 
@@ -477,14 +479,14 @@ EndpointManager::_BindToEphemeral(TCPEndpoint* endpoint,
 				newAddress.SetTo(address);
 				newAddress.SetPort(port);
 
-				TRACE(("   EndpointManager::BindToEphemeral(%p) -> %s\n",
+				TRACE("   EndpointManager::BindToEphemeral(%p) -> %s\n",
 					endpoint, AddressString(Domain(), *newAddress,
-					true).Data()));
+					true).Data());
 				T(Bind(endpoint, newAddress, true));
 
 				status_t status = _Bind(endpoint, *newAddress);
-				TRACE(("EndpointManager::_BindToEphemeral(%p, %p) bound port %d and is returning status %s\n",
-					   endpoint, address, ntohs(port), strerror(status)));
+				TRACE("EndpointManager::_BindToEphemeral(%p, %p) bound port %d and is returning status %s\n",
+					   endpoint, address, (ntohs(port)), strerror(status));
 				return status;
 			}
 
@@ -500,7 +502,7 @@ EndpointManager::_BindToEphemeral(TCPEndpoint* endpoint,
 status_t
 EndpointManager::_Bind(TCPEndpoint* endpoint, const sockaddr* address)
 {
-	TRACE(("EndpointManager::_Bind(%p, %p)\n", endpoint, address));
+	TRACE("EndpointManager::_Bind(%p, %p)\n", endpoint, address);
 	// Thus far we have checked if the Bind() is allowed
 
 	status_t status = endpoint->next->module->bind(endpoint->next, address);
@@ -516,11 +518,11 @@ EndpointManager::_Bind(TCPEndpoint* endpoint, const sockaddr* address)
 status_t
 EndpointManager::Unbind(TCPEndpoint* endpoint)
 {
-	TRACE(("EndpointManager::Unbind(%p)\n", endpoint));
+	TRACE("EndpointManager::Unbind(%p)\n", endpoint);
 	T(Unbind(endpoint));
 
 	if (endpoint == NULL || !endpoint->IsBound()) {
-		TRACE(("  endpoint is unbound.\n"));
+		TRACE("  endpoint is unbound.\n");
 		return B_BAD_VALUE;
 	}
 
@@ -540,7 +542,7 @@ EndpointManager::Unbind(TCPEndpoint* endpoint)
 status_t
 EndpointManager::ReplyWithReset(tcp_segment_header& segment, net_buffer* buffer)
 {
-	TRACE(("TCP: Sending RST...\n"));
+	TRACE("KWA TCP: Sending RST...\n");
 
 	net_buffer* reply = gBufferModule->create(512);
 	if (reply == NULL)
@@ -571,7 +573,7 @@ EndpointManager::ReplyWithReset(tcp_segment_header& segment, net_buffer* buffer)
 	if (status != B_OK)
 		gBufferModule->free(reply);
 
-	TRACE(("TCP: RST sent with status %s...\n", strerror(status)));
+	TRACE("TCP: RST sent with status %s...\n", strerror(status));
 	return status;
 }
 
@@ -583,12 +585,12 @@ EndpointManager::Dump() const
 	kprintf("%10s %21s %21s %8s %8s %12s\n", "address", "local", "peer",
 		"recv-q", "send-q", "state");
 
-	kprintf("\nACCORDING TO CONNECTION_HASH\n");
+	kprintf("\nCONNECTION_HASH (%ld entries)\n", fConnectionHash.CountElements());
 	ConnectionTable::Iterator iterator = fConnectionHash.GetIterator();
 
 	while (iterator.HasNext()) {
 		TCPEndpoint *endpoint = iterator.Next();
-
+	
 		char localBuf[64], peerBuf[64];
 		endpoint->LocalAddress().AsString(localBuf, sizeof(localBuf), true);
 		endpoint->PeerAddress().AsString(peerBuf, sizeof(peerBuf), true);
@@ -596,22 +598,6 @@ EndpointManager::Dump() const
 		kprintf("%p %21s %21s %8lu %8lu %12s\n", endpoint, localBuf, peerBuf,
 			endpoint->fReceiveQueue.Available(), endpoint->fSendQueue.Used(),
 			name_for_state(endpoint->State()));
-	}
-
-	kprintf("\nACCORDING TO ENDPOINT_HASH\n");
-	EndpointTable::Iterator endpoint_iterator = fEndpointHash.GetIterator();
-	while (endpoint_iterator.HasNext()) {
-		TCPEndpoint *endpoint = endpoint_iterator.Next();
-		char localBuf[64], peerBuf[64];
-		endpoint->LocalAddress().AsString(localBuf, sizeof(localBuf),
-										  true);
-		endpoint->PeerAddress().AsString(peerBuf, sizeof(peerBuf),
-										 true);
-
-		kprintf("%p %21s %21s %8lu %8lu %12s\n", endpoint, localBuf,
-				peerBuf, endpoint->fReceiveQueue.Available(),
-				endpoint->fSendQueue.Used(),
-				name_for_state(endpoint->State()));
 	}
 }
 

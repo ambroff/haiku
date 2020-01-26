@@ -104,7 +104,7 @@ private:
 			status_t		_BindToEphemeral(TCPEndpoint* endpoint,
 								const sockaddr* address);
 
-	typedef BOpenHashTable<ConnectionHashDefinition> ConnectionTable;
+	typedef BOpenHashTable<ConnectionHashDefinition, true, true> ConnectionTable;
 	typedef MultiHashTable<EndpointHashDefinition> EndpointTable;
 
 	rw_lock					fLock;
