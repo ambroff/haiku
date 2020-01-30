@@ -114,7 +114,7 @@ CppUnit::Test* BOpenHashTableTest::Suite()
 	suite->addTest(new CppUnit::TestCaller<BOpenHashTableTest>(
 					   "BOpenHashTable::Clear and return test",
 					   &BOpenHashTableTest::ClearAndReturnTest));
-				   
+
 	return suite;
 }
 
