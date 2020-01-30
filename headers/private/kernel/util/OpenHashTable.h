@@ -70,6 +70,11 @@ struct MallocAllocator {
 	}
 };
 
+#if KDEBUG_LEVEL_2
+#define BOPENHASHTABLE_DEFAULT_CHECK_DUPLICATES true
+#else
+#define BOPENHASHTABLE_DEFAULT_CHECK_DUPLICATES false
+#endif
 
 /** Implements an hash table with open hashing, that is, colliding entries are
  * stored in a linked list. The table may be made to adjust its number of slots
@@ -82,7 +87,8 @@ struct MallocAllocator {
  * out of memory (except at Init time).
  */
 template<typename Definition, bool AutoExpand = true,
-	bool CheckDuplicates = false, typename Allocator = MallocAllocator>
+	bool CheckDuplicates = BOPENHASHTABLE_DEFAULT_CHECK_DUPLICATES,
+	typename Allocator = MallocAllocator>
 class BOpenHashTable {
 public:
 	typedef BOpenHashTable<Definition, AutoExpand, CheckDuplicates> HashTable;
