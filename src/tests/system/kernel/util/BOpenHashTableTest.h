@@ -8,10 +8,13 @@ public:
 	BOpenHashTableTest(std::string name = "");
 
 	void InsertTest();
+	void InsertUncheckedTest();
+	void InsertUncheckedUninitializedTest();
 	void IterateAndCountTest();
 	void ResizeTest();
 	void LookupTest();
 	void RemoveTest();
+	void RemoveUncheckedTest();
 	void DuplicateInsertTest();
 	void DisableAutoExpandTest();
 	void InitWithZeroSizeTest();

@@ -1,4 +1,4 @@
-#include <cppunit/TestAssert.h>
+U#include <cppunit/TestAssert.h>
 #include <cppunit/TestCaller.h>
 #include <cppunit/TestSuite.h>
 #include <TestShell.h>
@@ -76,6 +76,12 @@ CppUnit::Test* BOpenHashTableTest::Suite()
 					   "BOpenHashTable::Insert test",
 					   &BOpenHashTableTest::InsertTest));
 	suite->addTest(new CppUnit::TestCaller<BOpenHashTableTest>(
+					   "BOpenHashTable::Insert unchecked test",
+					   &BOpenHashTableTest::InsertUncheckedTest);
+	suite->addTest(new CppUnit::TestCaller<BOpenHashTableTest>(
+					   "BOpenHashTable::Insert unchecked uninitialized test",
+					   &BOpenHashTableTest::InsertUncheckedUninitializedTest);
+	suite->addTest(new CppUnit::TestCaller<BOpenHashTableTest>(
 					   "BOpenHashTable::Iterate and count test",
 					   &BOpenHashTableTest::IterateAndCountTest));
 	suite->addTest(new CppUnit::TestCaller<BOpenHashTableTest>(
@@ -87,6 +93,9 @@ CppUnit::Test* BOpenHashTableTest::Suite()
 	suite->addTest(new CppUnit::TestCaller<BOpenHashTableTest>(
 					   "BOpenHashTable::Remove test",
 					   &BOpenHashTableTest::RemoveTest));
+	suite->addTest(new CppUnit::TestCaller<BOpenHashTableTest>(
+					   "BOpenHashTable::Remove unchecked test",
+					   &BOpenHashTableTest::RemoveUncheckedTest));
 	suite->addTest(new CppUnit::TestCaller<BOpenHashTableTest>(
 					   "BOpenHashTable::Duplicate insert test",
 					   &BOpenHashTableTest::DuplicateInsertTest));
@@ -123,6 +132,13 @@ void BOpenHashTableTest::InsertTest()
 	CPPUNIT_ASSERT_EQUAL(table.Insert(&entry), B_OK);
 }
 
+void BOpenHashTableTest::InsertUncheckedTest()
+{
+}
+
+void BOpenHashTableTest::InsertUncheckedUninitializedTest()
+{
+}
 
 void BOpenHashTableTest::IterateAndCountTest() {
 	const size_t kEntryCount = 20;
@@ -208,6 +224,19 @@ void BOpenHashTableTest::RemoveTest() {
 	CPPUNIT_ASSERT_EQUAL(table.Lookup(123), NULL);
 }
 
+void BOpenHashTableTest::RemoveUncheckedTest()
+{
+	Entry entry(123);
+
+	BOpenHashTable<EntryDefinition> table;
+	CPPUNIT_ASSERT_EQUAL(table.Init(0), B_OK);
+
+	CPPUNIT_ASSERT_EQUAL(table.Insert(&entry), B_OK);
+	CPPUNIT_ASSERT_EQUAL(table.Lookup(123), &entry);
+
+	table.RemoveUnchecked(&entry);
+	CPPUNIT_ASSERT_EQUAL(table.Lookup(123), NULL);
+}
 
 void BOpenHashTableTest::DuplicateInsertTest()
 {
