@@ -1,4 +1,4 @@
-U#include <cppunit/TestAssert.h>
+#include <cppunit/TestAssert.h>
 #include <cppunit/TestCaller.h>
 #include <cppunit/TestSuite.h>
 #include <TestShell.h>
@@ -77,10 +77,10 @@ CppUnit::Test* BOpenHashTableTest::Suite()
 					   &BOpenHashTableTest::InsertTest));
 	suite->addTest(new CppUnit::TestCaller<BOpenHashTableTest>(
 					   "BOpenHashTable::Insert unchecked test",
-					   &BOpenHashTableTest::InsertUncheckedTest);
+					   &BOpenHashTableTest::InsertUncheckedTest));
 	suite->addTest(new CppUnit::TestCaller<BOpenHashTableTest>(
 					   "BOpenHashTable::Insert unchecked uninitialized test",
-					   &BOpenHashTableTest::InsertUncheckedUninitializedTest);
+					   &BOpenHashTableTest::InsertUncheckedUninitializedTest));
 	suite->addTest(new CppUnit::TestCaller<BOpenHashTableTest>(
 					   "BOpenHashTable::Iterate and count test",
 					   &BOpenHashTableTest::IterateAndCountTest));
@@ -96,6 +96,9 @@ CppUnit::Test* BOpenHashTableTest::Suite()
 	suite->addTest(new CppUnit::TestCaller<BOpenHashTableTest>(
 					   "BOpenHashTable::Remove unchecked test",
 					   &BOpenHashTableTest::RemoveUncheckedTest));
+	suite->addTest(new CppUnit::TestCaller<BOpenHashTableTest>(
+					   "BOpenHashTable::Remove when not present test",
+					   &BOpenHashTableTest::RemoveWhenNotPresentTest));
 	suite->addTest(new CppUnit::TestCaller<BOpenHashTableTest>(
 					   "BOpenHashTable::Duplicate insert test",
 					   &BOpenHashTableTest::DuplicateInsertTest));
@@ -234,7 +237,7 @@ void BOpenHashTableTest::RemoveTest() {
 
 	table.Remove(&entry);
 	CPPUNIT_ASSERT_EQUAL(table.Lookup(123), NULL);
-}lkl
+}
 
 void BOpenHashTableTest::RemoveUncheckedTest()
 {
