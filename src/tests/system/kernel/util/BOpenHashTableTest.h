@@ -15,6 +15,7 @@ public:
 	void LookupTest();
 	void RemoveTest();
 	void RemoveUncheckedTest();
+	void RemoveWhenNotPresentTest();
 	void DuplicateInsertTest();
 	void DisableAutoExpandTest();
 	void InitWithZeroSizeTest();
