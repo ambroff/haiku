@@ -183,7 +183,12 @@ BitmapStreamTest::DetachBitmapTest()
 	NextSubTest();
 	delete pfullstream;
 	pfullstream = NULL;
-	CPPUNIT_ASSERT(pbits->BitsLength() == 0);
+
+	// KWA FIXME: Cannot verify by checking pbits because the destructor
+	// of pfullstream will delete it. We need to instrument the BBitmap pbits
+	// instead, maybe by passing a decorator or something? Check
+	// BBitmap::_Cleanup() to ensure you understand this.
+	//CPPUNIT_ASSERT(pbits->BitsLength() == 0);
 }
 
 /**
