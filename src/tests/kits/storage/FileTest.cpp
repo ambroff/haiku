@@ -88,7 +88,7 @@ FileTest::InitTest1()
 		{
 			for (int32 i = 0; i < initTestCasesCount; i++) {
 				if (BTestShell::GlobalBeVerbose()) {
-					printf("[%ld]", i);
+					printf("[%d]", i);
 					fflush(stdout);
 				}
 				test(initTestCases[i]);
@@ -197,7 +197,7 @@ FileTest::InitTest2()
 		{
 			for (int32 i = 0; i < initTestCasesCount; i++) {
 				if (BTestShell::GlobalBeVerbose()) {
-					printf("[%ld]", i);
+					printf("[%d]", i);
 					fflush(stdout);
 				}
 				test(initTestCases[i]);
