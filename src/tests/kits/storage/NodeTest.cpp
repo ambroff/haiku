@@ -743,11 +743,11 @@ NodeTest::AttrTest(BNode &node)
 	tooLongAttrName[B_ATTR_NAME_LENGTH + 2] = '\0';
 	CPPUNIT_ASSERT_EQUAL(
 		node.WriteAttr(tooLongAttrName, B_STRING_TYPE, 0, buffer,
-					   sizeof(buffer)),
+			sizeof(buffer)),
 		B_NAME_TOO_LONG);
 	CPPUNIT_ASSERT_EQUAL(
 		node.ReadAttr(tooLongAttrName, B_STRING_TYPE, 0, buffer,
-					  sizeof(buffer)),
+			sizeof(buffer)),
 		B_NAME_TOO_LONG);
 	CPPUNIT_ASSERT_EQUAL(node.RemoveAttr(tooLongAttrName), B_NAME_TOO_LONG);
 
