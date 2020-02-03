@@ -558,22 +558,22 @@ FileTest::SizeTest()
 	off_t size;
 	CPPUNIT_ASSERT( file.GetSize(&size) != B_OK );
 	CPPUNIT_ASSERT( file.SetSize(100) != B_OK );
-	// read only file
+	// read only file, SetSize will not succeed
 	NextSubTest();
 	file.SetTo(testFilename1, B_READ_ONLY | B_CREATE_FILE);
 	CPPUNIT_ASSERT( file.InitCheck() == B_OK );
 	CPPUNIT_ASSERT( file.GetSize(&size) == B_OK );
 	CPPUNIT_ASSERT( size == 0 );
-	CPPUNIT_ASSERT( file.SetSize(100) == B_OK );
+	CPPUNIT_ASSERT_EQUAL(file.SetSize(100), B_BAD_VALUE);
 	CPPUNIT_ASSERT( file.GetSize(&size) == B_OK );
-	CPPUNIT_ASSERT( size == 100 );
+	CPPUNIT_ASSERT_EQUAL(size, 0);
 	file.Unset();
-	// shorten existing file
+	// successfully set size of file with appropriate flags
 	NextSubTest();
 	file.SetTo(testFilename1, B_WRITE_ONLY);
 	CPPUNIT_ASSERT( file.InitCheck() == B_OK );
 	CPPUNIT_ASSERT( file.GetSize(&size) == B_OK );
-	CPPUNIT_ASSERT( size == 100 );
+	CPPUNIT_ASSERT_EQUAL(size, 0);
 	CPPUNIT_ASSERT( file.SetSize(73) == B_OK );
 	CPPUNIT_ASSERT( file.GetSize(&size) == B_OK );
 	CPPUNIT_ASSERT( size == 73 );
@@ -587,16 +587,6 @@ FileTest::SizeTest()
 	CPPUNIT_ASSERT( file.SetSize(147) == B_OK );
 	CPPUNIT_ASSERT( file.GetSize(&size) == B_OK );
 	CPPUNIT_ASSERT( size == 147 );
-	file.Unset();
-	// erase existing file (read only)
-	NextSubTest();
-	file.SetTo(testFilename1, B_READ_ONLY | B_ERASE_FILE);
-	CPPUNIT_ASSERT( file.InitCheck() == B_OK );
-	CPPUNIT_ASSERT( file.GetSize(&size) == B_OK );
-	CPPUNIT_ASSERT( size == 0 );
-	CPPUNIT_ASSERT( file.SetSize(132) == B_OK );
-	CPPUNIT_ASSERT( file.GetSize(&size) == B_OK );
-	CPPUNIT_ASSERT( size == 132 );
 	file.Unset();
 	// erase existing file (write only)
 	NextSubTest();
