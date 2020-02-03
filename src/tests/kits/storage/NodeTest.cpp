@@ -734,11 +734,13 @@ NodeTest::AttrTest(BNode &node)
 						   B_BAD_ADDRESS, B_BAD_VALUE) );
 	CPPUNIT_ASSERT( equals(node.RemoveAttr(NULL), B_BAD_ADDRESS, B_BAD_VALUE) );
 	// too long attribute name
-// R5: Read/RemoveAttr() do not return B_NAME_TOO_LONG, but B_ENTRY_NOT_FOUND
-// R5: WriteAttr() does not return B_NAME_TOO_LONG, but B_BAD_VALUE
-	char tooLongAttrName[B_ATTR_NAME_LENGTH + 1];
+	// R5: Read/RemoveAttr() do not return B_NAME_TOO_LONG, but B_ENTRY_NOT_FOUND
+	// R5: WriteAttr() does not return B_NAME_TOO_LONG, but B_BAD_VALUE
+	// R5: Haiku has a max attribute size of 256, while R5's was 255, exclusive
+	//     of the null terminator. See changeset 4069e1f30.
+	char tooLongAttrName[B_ATTR_NAME_LENGTH + 2];
 	memset(tooLongAttrName, 'a', B_ATTR_NAME_LENGTH);
-	tooLongAttrName[B_ATTR_NAME_LENGTH] = '\0';
+	tooLongAttrName[B_ATTR_NAME_LENGTH + 1] = '\0';
 	CPPUNIT_ASSERT( node.WriteAttr(tooLongAttrName, B_STRING_TYPE, 0, buffer,
 								   sizeof(buffer)) == B_BAD_VALUE );
 	CPPUNIT_ASSERT( node.ReadAttr(tooLongAttrName, B_STRING_TYPE, 0, buffer,
@@ -799,9 +801,11 @@ NodeTest::AttrRenameTest(BNode &node)
 	CPPUNIT_ASSERT( node.SetTo("./") == B_OK );
 
 	// Test the case of the first attribute not existing
-	node.RemoveAttr(attr1);		
-	CPPUNIT_ASSERT( node.RenameAttr(attr1, attr2) == B_BAD_VALUE );
-		
+	node.RemoveAttr(attr1);
+	status_t status = node.RenameAttr(attr1, attr2);
+	fprintf(stderr, "KWA: result: %s\n", strerror(status));
+	CPPUNIT_ASSERT(status == B_BAD_VALUE);
+
 	// Write an attribute, read it to verify it, rename it, read the
 	// new attribute, read the old (which fails), and then remove the new.
 	CPPUNIT_ASSERT( node.WriteAttr(attr1, B_STRING_TYPE, 0, str, strLen) == strLen );
