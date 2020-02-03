@@ -679,6 +679,7 @@ NodeTest::AttrDirTest()
 void
 NodeTest::AttrTest(BNode &node)
 {
+	// KWA: this one
 	// add some attributes
 	const char *attrNames[] = {
 		"attr1", "attr2", "attr3", "attr4", "attr5"
@@ -737,7 +738,7 @@ NodeTest::AttrTest(BNode &node)
 // R5: WriteAttr() does not return B_NAME_TOO_LONG, but B_BAD_VALUE
 	char tooLongAttrName[B_ATTR_NAME_LENGTH + 1];
 	memset(tooLongAttrName, 'a', B_ATTR_NAME_LENGTH);
-	tooLongAttrName[B_ATTR_NAME_LENGTH + 1] = 0;
+	tooLongAttrName[B_ATTR_NAME_LENGTH] = '\0';
 	CPPUNIT_ASSERT( node.WriteAttr(tooLongAttrName, B_STRING_TYPE, 0, buffer,
 								   sizeof(buffer)) == B_BAD_VALUE );
 	CPPUNIT_ASSERT( node.ReadAttr(tooLongAttrName, B_STRING_TYPE, 0, buffer,
@@ -823,7 +824,7 @@ NodeTest::AttrRenameTest(BNode &node)
 // R5: RenameAttr() returns B_BAD_VALUE instead of B_NAME_TOO_LONG
 	char tooLongAttrName[B_ATTR_NAME_LENGTH + 1];
 	memset(tooLongAttrName, 'a', B_ATTR_NAME_LENGTH);
-	tooLongAttrName[B_ATTR_NAME_LENGTH + 1] = 0;
+	tooLongAttrName[B_ATTR_NAME_LENGTH] = '\0';
 	CPPUNIT_ASSERT( node.RenameAttr(attr1, tooLongAttrName)
 					== B_BAD_VALUE );
 	CPPUNIT_ASSERT( node.RenameAttr(tooLongAttrName, attr1)
@@ -910,7 +911,7 @@ NodeTest::AttrInfoTest(BNode &node)
 // R5: GetAttrInfo() does not return B_NAME_TOO_LONG
 	char tooLongAttrName[B_ATTR_NAME_LENGTH + 1];
 	memset(tooLongAttrName, 'a', B_ATTR_NAME_LENGTH);
-	tooLongAttrName[B_ATTR_NAME_LENGTH + 1] = 0;
+	tooLongAttrName[B_ATTR_NAME_LENGTH] = '\0';
 	CPPUNIT_ASSERT( node.GetAttrInfo(tooLongAttrName, &info)
 					== B_ENTRY_NOT_FOUND );
 }
@@ -1009,7 +1010,7 @@ NodeTest::AttrBStringTest(BNode &node)
 // R5: Read/WriteAttrString() do not return B_NAME_TOO_LONG 
 	char tooLongAttrName[B_ATTR_NAME_LENGTH + 1];
 	memset(tooLongAttrName, 'a', B_ATTR_NAME_LENGTH);
-	tooLongAttrName[B_ATTR_NAME_LENGTH + 1] = 0;
+	tooLongAttrName[B_ATTR_NAME_LENGTH] = '\0';
 	CPPUNIT_ASSERT( node.WriteAttrString(tooLongAttrName, &writeValue)
 					== B_BAD_VALUE );
 	CPPUNIT_ASSERT( node.ReadAttrString(tooLongAttrName, &readValue)
