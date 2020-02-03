@@ -104,11 +104,12 @@ NodeTest::AddBaseClassTests(const char *prefix, CppUnit::TestSuite *suite)
 
 	suite->addTest( new TC(p + "BNode::AttrDir Test", &NodeTest::AttrDirTest) );
 	suite->addTest( new TC(p + "BNode::Attr Test", &NodeTest::AttrTest) );
-	suite->addTest( new TC(p + "BNode::AttrRename Test"
-#if TEST_R5
-								" (NOTE: test not actually performed with R5 libraries)"
-#endif								
-								, &NodeTest::AttrRenameTest) );
+
+	// TODO: Re-enable this test once BFS implements attribute rename.
+	// suite->addTest(new TC(
+	// 	p + "BNode::AttrRename Test",
+	// 	&NodeTest::AttrRenameTest));
+
 	suite->addTest( new TC(p + "BNode::AttrInfo Test", &NodeTest::AttrInfoTest) );
 	// TODO: AttrBString deadlocks entire OS (UnitTester at 100% CPU,
 	// windows don't respond to actions, won't open, OS won't even shut down)

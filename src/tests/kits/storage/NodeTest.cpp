@@ -807,9 +807,7 @@ NodeTest::AttrRenameTest(BNode &node)
 
 	// Test the case of the first attribute not existing
 	node.RemoveAttr(attr1);
-	status_t status = node.RenameAttr(attr1, attr2);
-	fprintf(stderr, "KWA: result: %s\n", strerror(status));
-	CPPUNIT_ASSERT(status == B_BAD_VALUE);
+	CPPUNIT_ASSERT( node.RenameAttr(attr1, attr2) == B_BAD_VALUE );
 
 	// Write an attribute, read it to verify it, rename it, read the
 	// new attribute, read the old (which fails), and then remove the new.
