@@ -8,18 +8,61 @@
 #include "HttpTest.h"
 
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <cstdio>
 
 #include <NetworkKit.h>
 #include <HttpRequest.h>
+#include <UrlProtocolListener.h>
 
 #include <cppunit/TestCaller.h>
 
 
-static const int kHeaderCountInTrivialRequest = 7;
-	// FIXME This is too strict and not very useful.
+namespace {
+
+class TestListener : public BUrlProtocolListener {
+public:
+	TestListener(std::string expectedResponseBody)
+		:
+		fExpectedResponseBody(expectedResponseBody)
+	{
+	}
+
+	virtual void DataReceived(
+		BUrlRequest *caller,
+		const char *data,
+		off_t position,
+		ssize_t size)
+	{
+		std::copy_n(
+			data + position,
+			size,
+			std::back_inserter(fActualResponseBody));
+	}
+
+	bool Verify()
+	{
+		if (fExpectedResponseBody != fActualResponseBody) {
+			// FIXME: Use the cppunit tools for this.
+			std::cerr << "Expected response body " << fExpectedResponseBody
+					  << std::endl;
+			std::cerr << "Received response body " << fActualResponseBody
+					  << std::endl;
+
+			return false;
+		}
+
+		return true;
+	}
+
+private:
+	std::string fExpectedResponseBody;
+	std::string fActualResponseBody;
+};
+
+}
 
 
 HttpTest::HttpTest()
@@ -37,30 +80,58 @@ void
 HttpTest::GetTest()
 {
 	BUrl testUrl(fBaseUrl, "/user-agent");
-	BUrlContext* c = new BUrlContext();
-	c->AcquireReference();
-	BHttpRequest t(testUrl);
+	BUrlContext* context = new BUrlContext();
+	context->AcquireReference();
 
-	t.SetContext(c);
+	std::string expectedResponseBody(
+		"{\n"
+		"  \"user-agent\": \"Services Kit (Haiku)\"\n"
+		"}\n");
+	TestListener listener(expectedResponseBody);
 
-	CPPUNIT_ASSERT(t.Run());
+	BHttpRequest request(testUrl, false, "HTTP", &listener, context);
+	CPPUNIT_ASSERT(request.Run());
+	while (request.IsRunning())
+		snooze(10);
 
-	while (t.IsRunning())
-		snooze(1000);
+	CPPUNIT_ASSERT_EQUAL(B_OK, request.Status());
 
-	CPPUNIT_ASSERT_EQUAL(B_OK, t.Status());
-
-	const BHttpResult& r = dynamic_cast<const BHttpResult&>(t.Result());
+	const BHttpResult& r = dynamic_cast<const BHttpResult&>(request.Result());
 	CPPUNIT_ASSERT_EQUAL(200, r.StatusCode());
 	CPPUNIT_ASSERT_EQUAL(BString("OK"), r.StatusText());
-	CPPUNIT_ASSERT_EQUAL(kHeaderCountInTrivialRequest,
-		r.Headers().CountHeaders());
-	CPPUNIT_ASSERT_EQUAL(42, r.Length());
-		// Fixed size as we know the response format.
-	CPPUNIT_ASSERT(!c->GetCookieJar().GetIterator().HasNext());
+
+	{
+		const BHttpHeaders& headers = r.Headers();
+		CPPUNIT_ASSERT_EQUAL(6, headers.CountHeaders());
+
+		CPPUNIT_ASSERT_EQUAL(
+			BString(headers.HeaderValue("Content-Type")),
+			BString("application/json"));
+		CPPUNIT_ASSERT_EQUAL(
+			BString(headers.HeaderValue("Content-Length")),
+			BString("43"));
+		CPPUNIT_ASSERT_EQUAL(
+			BString(headers.HeaderValue("Access-Control-Allow-Origin")),
+			BString("*"));
+		CPPUNIT_ASSERT_EQUAL(
+			BString(headers.HeaderValue("Access-Control-Allow-Credentials")),
+			BString("true"));
+		CPPUNIT_ASSERT_EQUAL(
+			BString(headers.HeaderValue("Server")),
+			BString("Werkzeug/1.0.0 Python/3.7.6"));
+		// CPPUNIT_ASSERT_EQUAL(
+		// 	BString(headers.HeaderValue("Date")),
+		// 	BString("Sat,  08 Feb 2020 08:09:31 GMT"));
+	}
+
+	CPPUNIT_ASSERT_EQUAL(43, r.Length());
+
+	CPPUNIT_ASSERT(listener.Verify());
+
+	CPPUNIT_ASSERT(!context->GetCookieJar().GetIterator().HasNext());
 		// This page should not set cookies
 
-	c->ReleaseReference();
+	context->ReleaseReference();
 }
 
 
@@ -210,8 +281,7 @@ HttpTest::_AuthTest(BUrl& testUrl)
 	const BHttpResult& r = dynamic_cast<const BHttpResult&>(t.Result());
 	CPPUNIT_ASSERT_EQUAL(200, r.StatusCode());
 	CPPUNIT_ASSERT_EQUAL(BString("OK"), r.StatusText());
-	CPPUNIT_ASSERT_EQUAL(kHeaderCountInTrivialRequest,
-		r.Headers().CountHeaders());
+	CPPUNIT_ASSERT_EQUAL(6, r.Headers().CountHeaders());
 	CPPUNIT_ASSERT_EQUAL(48, r.Length());
 		// Fixed size as we know the response format.
 }
