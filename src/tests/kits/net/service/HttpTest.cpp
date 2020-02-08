@@ -42,19 +42,9 @@ public:
 			std::back_inserter(fActualResponseBody));
 	}
 
-	bool Verify()
+	void Verify()
 	{
-		if (fExpectedResponseBody != fActualResponseBody) {
-			// FIXME: Use the cppunit tools for this.
-			std::cerr << "Expected response body " << fExpectedResponseBody
-					  << std::endl;
-			std::cerr << "Received response body " << fActualResponseBody
-					  << std::endl;
-
-			return false;
-		}
-
-		return true;
+		CPPUNIT_ASSERT_EQUAL(fExpectedResponseBody, fActualResponseBody);
 	}
 
 private:
@@ -126,7 +116,7 @@ HttpTest::GetTest()
 
 	CPPUNIT_ASSERT_EQUAL(43, r.Length());
 
-	CPPUNIT_ASSERT(listener.Verify());
+	listener.Verify();
 
 	CPPUNIT_ASSERT(!context->GetCookieJar().GetIterator().HasNext());
 		// This page should not set cookies
@@ -153,7 +143,7 @@ HttpTest::ProxyTest()
 	CPPUNIT_ASSERT(t.Run());
 
 	while (t.IsRunning())
-		snooze(1000);
+		snooze(10);
 
 	CPPUNIT_ASSERT_EQUAL(B_OK, t.Status());
 
@@ -202,7 +192,7 @@ HttpTest::PortTest()
 	CPPUNIT_ASSERT(t.Run());
 
 	while (t.IsRunning())
-		snooze(1000);
+		snooze(10);
 
 	CPPUNIT_ASSERT_EQUAL(B_OK, t.Status());
 
@@ -232,7 +222,7 @@ HttpTest::UploadTest()
 	CPPUNIT_ASSERT(t.Run());
 
 	while (t.IsRunning())
-		snooze(1000);
+		snooze(10);
 
 	CPPUNIT_ASSERT_EQUAL(B_OK, t.Status());
 
@@ -263,27 +253,33 @@ HttpTest::AuthDigestTest()
 void
 HttpTest::_AuthTest(BUrl& testUrl)
 {
-	BUrlContext c;
-	BHttpRequest t(testUrl);
+	std::string expectedResponseBody(
+		"{\n"
+		"  \"authenticated\": true, \n"
+		"  \"user\": \"walter\"\n"
+		"}\n");
+	TestListener listener(expectedResponseBody);
 
-	t.SetContext(&c);
+	BUrlContext context;
+	BHttpRequest request(testUrl, false, "HTTP", &listener, &context);
+	request.SetUserName("walter");
+	request.SetPassword("secret");
 
-	t.SetUserName("walter");
-	t.SetPassword("secret");
+	CPPUNIT_ASSERT(request.Run());
 
-	CPPUNIT_ASSERT(t.Run());
+	while (request.IsRunning())
+		snooze(10);
 
-	while (t.IsRunning())
-		snooze(1000);
+	CPPUNIT_ASSERT_EQUAL(B_OK, request.Status());
 
-	CPPUNIT_ASSERT_EQUAL(B_OK, t.Status());
+	const BHttpResult& result
+		= dynamic_cast<const BHttpResult &>(request.Result());
+	CPPUNIT_ASSERT_EQUAL(200, result.StatusCode());
+	CPPUNIT_ASSERT_EQUAL(BString("OK"), result.StatusText());
+	CPPUNIT_ASSERT_EQUAL(6, result.Headers().CountHeaders());
+	CPPUNIT_ASSERT_EQUAL(49, result.Length());
 
-	const BHttpResult& r = dynamic_cast<const BHttpResult&>(t.Result());
-	CPPUNIT_ASSERT_EQUAL(200, r.StatusCode());
-	CPPUNIT_ASSERT_EQUAL(BString("OK"), r.StatusText());
-	CPPUNIT_ASSERT_EQUAL(6, r.Headers().CountHeaders());
-	CPPUNIT_ASSERT_EQUAL(48, r.Length());
-		// Fixed size as we know the response format.
+	listener.Verify();
 }
 
 
