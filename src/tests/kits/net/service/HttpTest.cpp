@@ -13,8 +13,8 @@
 #include <cstring>
 #include <cstdio>
 
-#include <NetworkKit.h>
 #include <HttpRequest.h>
+#include <NetworkKit.h>
 #include <UrlProtocolListener.h>
 
 #include <cppunit/TestCaller.h>
@@ -24,9 +24,11 @@ namespace {
 
 class TestListener : public BUrlProtocolListener {
 public:
-	TestListener(std::string expectedResponseBody)
+	TestListener(const std::string& expectedResponseBody,
+				 const HttpHeaderMap& expectedResponseHeaders)
 		:
-		fExpectedResponseBody(expectedResponseBody)
+		fExpectedResponseBody(expectedResponseBody),
+		fExpectedResponseHeaders(expectedResponseHeaders)
 	{
 	}
 
@@ -42,15 +44,81 @@ public:
 			std::back_inserter(fActualResponseBody));
 	}
 
+	virtual void HeadersReceived(
+		BUrlRequest* caller,
+		const BUrlResult& result)
+	{
+		const BHttpResult& http_result
+			= dynamic_cast<const BHttpResult&>(result);
+		const BHttpHeaders& headers = http_result.Headers();
+
+		for (int32 i = 0; i < headers.CountHeaders(); ++i) {
+			const BHttpHeader& header = headers.HeaderAt(i);
+			fActualResponseHeaders[std::string(header.Name())]
+				= std::string(header.Value());
+		}
+	}
+
 	void Verify()
 	{
 		CPPUNIT_ASSERT_EQUAL(fExpectedResponseBody, fActualResponseBody);
+
+		for (HttpHeaderMap::iterator iter = fActualResponseHeaders.begin();
+			 iter != fActualResponseHeaders.end();
+			 ++iter)
+		{
+			// FIXME: Remove this
+			if (iter->first == "Date" || iter->first == "Www-Authenticate") {
+				continue;
+			}
+			CPPUNIT_ASSERT_EQUAL_MESSAGE(
+				"(header " + iter->first + ")",
+				fExpectedResponseHeaders[iter->first],
+				iter->second);
+		}
+		CPPUNIT_ASSERT_EQUAL(fExpectedResponseHeaders.size(), fActualResponseHeaders.size());
 	}
 
 private:
 	std::string fExpectedResponseBody;
 	std::string fActualResponseBody;
+
+	HttpHeaderMap fExpectedResponseHeaders;
+	HttpHeaderMap fActualResponseHeaders;
 };
+
+
+void AuthTest(
+	BUrlContext &context,
+	BUrl &testUrl,
+	const HttpHeaderMap &expectedResponseHeaders)
+{
+	std::string expectedResponseBody(
+		"{\n"
+		"  \"authenticated\": true, \n"
+		"  \"user\": \"walter\"\n"
+		"}\n");
+	TestListener listener(expectedResponseBody, expectedResponseHeaders);
+
+	BHttpRequest request(testUrl, false, "HTTP", &listener, &context);
+	request.SetUserName("walter");
+	request.SetPassword("secret");
+
+	CPPUNIT_ASSERT(request.Run());
+
+	while (request.IsRunning())
+		snooze(10);
+
+	CPPUNIT_ASSERT_EQUAL(B_OK, request.Status());
+
+	const BHttpResult &result =
+		dynamic_cast<const BHttpResult &>(request.Result());
+	CPPUNIT_ASSERT_EQUAL(200, result.StatusCode());
+	CPPUNIT_ASSERT_EQUAL(BString("OK"), result.StatusText());
+	CPPUNIT_ASSERT_EQUAL(49, result.Length());
+
+	listener.Verify();
+}
 
 }
 
@@ -77,7 +145,14 @@ HttpTest::GetTest()
 		"{\n"
 		"  \"user-agent\": \"Services Kit (Haiku)\"\n"
 		"}\n");
-	TestListener listener(expectedResponseBody);
+	HttpHeaderMap expectedResponseHeaders;
+	expectedResponseHeaders["Content-Type"] = "application/json";
+	expectedResponseHeaders["Content-Length"] = "43";
+	expectedResponseHeaders["Access-Control-Allow-Origin"] = "*";
+	expectedResponseHeaders["Access-Control-Allow-Credentials"] = "true";
+	expectedResponseHeaders["Server"] = "Werkzeug/1.0.0 Python/3.7.6";
+	expectedResponseHeaders["Date"] = ""; // FIXME
+	TestListener listener(expectedResponseBody, expectedResponseHeaders);
 
 	BHttpRequest request(testUrl, false, "HTTP", &listener, context);
 	CPPUNIT_ASSERT(request.Run());
@@ -89,30 +164,6 @@ HttpTest::GetTest()
 	const BHttpResult& r = dynamic_cast<const BHttpResult&>(request.Result());
 	CPPUNIT_ASSERT_EQUAL(200, r.StatusCode());
 	CPPUNIT_ASSERT_EQUAL(BString("OK"), r.StatusText());
-
-	{
-		const BHttpHeaders& headers = r.Headers();
-		CPPUNIT_ASSERT_EQUAL(6, headers.CountHeaders());
-
-		CPPUNIT_ASSERT_EQUAL(
-			BString(headers.HeaderValue("Content-Type")),
-			BString("application/json"));
-		CPPUNIT_ASSERT_EQUAL(
-			BString(headers.HeaderValue("Content-Length")),
-			BString("43"));
-		CPPUNIT_ASSERT_EQUAL(
-			BString(headers.HeaderValue("Access-Control-Allow-Origin")),
-			BString("*"));
-		CPPUNIT_ASSERT_EQUAL(
-			BString(headers.HeaderValue("Access-Control-Allow-Credentials")),
-			BString("true"));
-		CPPUNIT_ASSERT_EQUAL(
-			BString(headers.HeaderValue("Server")),
-			BString("Werkzeug/1.0.0 Python/3.7.6"));
-		// CPPUNIT_ASSERT_EQUAL(
-		// 	BString(headers.HeaderValue("Date")),
-		// 	BString("Sat,  08 Feb 2020 08:09:31 GMT"));
-	}
 
 	CPPUNIT_ASSERT_EQUAL(43, r.Length());
 
@@ -237,49 +288,52 @@ HttpTest::UploadTest()
 void
 HttpTest::AuthBasicTest()
 {
+	BUrlContext context;
+	
 	BUrl testUrl(fBaseUrl, "/basic-auth/walter/secret");
-	_AuthTest(testUrl);
+
+	HttpHeaderMap expectedResponseHeaders;
+	expectedResponseHeaders["Access-Control-Allow-Credentials"] = "true";
+	expectedResponseHeaders["Access-Control-Allow-Origin"] = "*";
+	expectedResponseHeaders["Content-Length"] = "49";
+	expectedResponseHeaders["Content-Type"] = "application/json";
+	expectedResponseHeaders["Date"] = "";
+	expectedResponseHeaders["Server"] = "Werkzeug/1.0.0 Python/3.7.6";
+	expectedResponseHeaders["Www-Authenticate"] = "Basic realm=\"Fake Realm\"";
+
+	AuthTest(context, testUrl, expectedResponseHeaders);
+
+	CPPUNIT_ASSERT(!context.GetCookieJar().GetIterator().HasNext());
+		// This page should not set cookies
 }
 
 
 void
 HttpTest::AuthDigestTest()
 {
-	BUrl testUrl(fBaseUrl, "/digest-auth/auth/walter/secret");
-	_AuthTest(testUrl);
-}
-
-
-void
-HttpTest::_AuthTest(BUrl& testUrl)
-{
-	std::string expectedResponseBody(
-		"{\n"
-		"  \"authenticated\": true, \n"
-		"  \"user\": \"walter\"\n"
-		"}\n");
-	TestListener listener(expectedResponseBody);
-
 	BUrlContext context;
-	BHttpRequest request(testUrl, false, "HTTP", &listener, &context);
-	request.SetUserName("walter");
-	request.SetPassword("secret");
 
-	CPPUNIT_ASSERT(request.Run());
+	BUrl testUrl(fBaseUrl, "/digest-auth/auth/walter/secret");
 
-	while (request.IsRunning())
-		snooze(10);
+	HttpHeaderMap expectedResponseHeaders;
+	expectedResponseHeaders["Access-Control-Allow-Credentials"] = "true";
+	expectedResponseHeaders["Access-Control-Allow-Origin"] = "*";
+	expectedResponseHeaders["Content-Length"] = "49";
+	expectedResponseHeaders["Content-Type"] = "application/json";
+	expectedResponseHeaders["Date"] = "";
+	expectedResponseHeaders["Server"] = "Werkzeug/1.0.0 Python/3.7.6";
+	expectedResponseHeaders["Set-Cookie"] = "stale_after=never; Path=/";
+	expectedResponseHeaders["Www-Authenticate"]
+		= "Digest realm=\"me@kennethreitz.com\", "
+		"nonce=\"54f03096e39fc96b80fc41f6dac4e489\", "
+		"qop=\"auth\", "
+		"opaque=\"ef3dfdd63cd2bba0af0f3a2c7806f40b\", "
+		"algorithm=MD5, "
+		"stale=FALSE";
 
-	CPPUNIT_ASSERT_EQUAL(B_OK, request.Status());
+	AuthTest(context, testUrl, expectedResponseHeaders);
 
-	const BHttpResult& result
-		= dynamic_cast<const BHttpResult &>(request.Result());
-	CPPUNIT_ASSERT_EQUAL(200, result.StatusCode());
-	CPPUNIT_ASSERT_EQUAL(BString("OK"), result.StatusText());
-	CPPUNIT_ASSERT_EQUAL(6, result.Headers().CountHeaders());
-	CPPUNIT_ASSERT_EQUAL(49, result.Length());
-
-	listener.Verify();
+	CPPUNIT_ASSERT(context.GetCookieJar().GetIterator().HasNext());
 }
 
 

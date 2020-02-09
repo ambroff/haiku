@@ -5,6 +5,8 @@
 #ifndef HTTP_TEST_H
 #define HTTP_TEST_H
 
+#include <map>
+#include <string>
 
 #include <Url.h>
 
@@ -12,6 +14,9 @@
 #include <TestSuite.h>
 
 #include <cppunit/TestSuite.h>
+
+
+typedef std::map<std::string, std::string> HttpHeaderMap;
 
 
 class HttpTest: public BTestCase {
@@ -29,8 +34,6 @@ public:
 	static						void	AddTests(BTestSuite& suite);
 
 private:
-								void	_AuthTest(BUrl& url);
-
 	template<class T> static	void	_AddCommonTests(BString prefix,
 											CppUnit::TestSuite& suite);
 
