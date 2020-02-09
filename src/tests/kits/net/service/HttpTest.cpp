@@ -88,7 +88,7 @@ private:
 };
 
 
-void AuthTest(
+void SendAuthenticatedRequest(
 	BUrlContext &context,
 	BUrl &testUrl,
 	const HttpHeaderMap &expectedResponseHeaders)
@@ -301,7 +301,7 @@ HttpTest::AuthBasicTest()
 	expectedResponseHeaders["Server"] = "Werkzeug/1.0.0 Python/3.7.6";
 	expectedResponseHeaders["Www-Authenticate"] = "Basic realm=\"Fake Realm\"";
 
-	AuthTest(context, testUrl, expectedResponseHeaders);
+	SendAuthenticatedRequest(context, testUrl, expectedResponseHeaders);
 
 	CPPUNIT_ASSERT(!context.GetCookieJar().GetIterator().HasNext());
 		// This page should not set cookies
@@ -331,9 +331,18 @@ HttpTest::AuthDigestTest()
 		"algorithm=MD5, "
 		"stale=FALSE";
 
-	AuthTest(context, testUrl, expectedResponseHeaders);
+	SendAuthenticatedRequest(context, testUrl, expectedResponseHeaders);
 
-	CPPUNIT_ASSERT(context.GetCookieJar().GetIterator().HasNext());
+	std::map<BString, BString> cookies;
+	BNetworkCookieJar::Iterator iter
+		= context.GetCookieJar().GetIterator();
+	while (iter.HasNext()) {
+		const BNetworkCookie* cookie = iter.Next();
+		cookies[cookie->Name()] = cookie->Value();
+	}
+	CPPUNIT_ASSERT_EQUAL(2, cookies.size());
+	CPPUNIT_ASSERT_EQUAL(BString("fake_value"), cookies["fake"]);
+	CPPUNIT_ASSERT_EQUAL(BString("never"), cookies["stale_after"]);
 }
 
 
