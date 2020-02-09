@@ -138,7 +138,8 @@ void string_replace(
 
 
 HttpTest::HttpTest()
-	: fBaseUrl("http://httpbin.org/")
+	:
+	fBaseUrl("http://192.168.1.17:9090/")
 {
 }
 
@@ -151,21 +152,26 @@ HttpTest::~HttpTest()
 void
 HttpTest::GetTest()
 {
-	BUrl testUrl(fBaseUrl, "/user-agent");
+	BUrl testUrl(fBaseUrl, "/");
 	BUrlContext* context = new BUrlContext();
 	context->AcquireReference();
 
 	std::string expectedResponseBody(
-		"{\n"
-		"  \"user-agent\": \"Services Kit (Haiku)\"\n"
-		"}\n");
+		"Path: /\r\n"
+		"\r\n"
+		"Headers\r\n"
+		"-------\r\n"
+		"Host: 192.168.1.17:9090\r\n"
+		"Accept: */*\r\n"
+		"Accept-Encoding: gzip\r\n"
+		"Connection: close\r\n"
+		"User-Agent: Services Kit (Haiku)\r\n");
 	HttpHeaderMap expectedResponseHeaders;
-	expectedResponseHeaders["Content-Type"] = "application/json";
-	expectedResponseHeaders["Content-Length"] = "43";
+	expectedResponseHeaders["Content-Type"] = "text/plain";
+	expectedResponseHeaders["Content-Length"] = "143";
 	expectedResponseHeaders["Access-Control-Allow-Origin"] = "*";
 	expectedResponseHeaders["Access-Control-Allow-Credentials"] = "true";
 	expectedResponseHeaders["Server"] = "Werkzeug/1.0.0 Python/3.7.6";
-	expectedResponseHeaders["Date"] = ""; // FIXME
 	TestListener listener(expectedResponseBody, expectedResponseHeaders);
 
 	BHttpRequest request(testUrl, false, "HTTP", &listener, context);
@@ -175,11 +181,12 @@ HttpTest::GetTest()
 
 	CPPUNIT_ASSERT_EQUAL(B_OK, request.Status());
 
-	const BHttpResult& r = dynamic_cast<const BHttpResult&>(request.Result());
-	CPPUNIT_ASSERT_EQUAL(200, r.StatusCode());
-	CPPUNIT_ASSERT_EQUAL(BString("OK"), r.StatusText());
+	const BHttpResult& result
+		= dynamic_cast<const BHttpResult&>(request.Result());
+	CPPUNIT_ASSERT_EQUAL(200, result.StatusCode());
+	CPPUNIT_ASSERT_EQUAL(BString("OK"), result.StatusText());
 
-	CPPUNIT_ASSERT_EQUAL(43, r.Length());
+	CPPUNIT_ASSERT_EQUAL(143, result.Length());
 
 	listener.Verify();
 
