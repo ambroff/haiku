@@ -2,6 +2,8 @@
 HTTP(S) server used for integration testing of ServicesKit.
 
 This service receives HTTP requests and just echos them back in the response.
+
+TODO: Handle Accept-Encoding.
 """
 
 import optparse
@@ -9,10 +11,21 @@ import os
 import sys
 import http.server
 import socket
+import io
+
+
+def extract_desired_status_code_from_path(path, default=200):
+    status_code = default
+    path_parts = os.path.split(path)
+    try:
+        status_code = int(path_parts[-1])
+    except ValueError:
+        pass
+    return status_code
 
 
 class RequestHandler(http.server.BaseHTTPRequestHandler):
-    def do_GET(self):
+    def do_GET(self, write_response=True):
         """
         Any GET request just gets echoed back to the sender. If the path ends with a numeric component like "/404" or
         "/500", then that value will be set as the status code in the response.
@@ -21,27 +34,60 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
         status codes as expected per RFC, such as having an empty response body for 201 response, only the functionality
         that is required to handle requests from HttpTests is implemented.
         """
-        status_code = 200
-        path_parts = os.path.split(self.path)
-        try:
-            status_code = int(path_parts[-1])
-        except ValueError:
-            pass
+        response_body = self._build_response_body()
 
-        self.send_response(status_code)
+        self.send_response(extract_desired_status_code_from_path(self.path, 200))
         self.send_header('Content-Type', 'text/plain')
-        self.wfile.write('Path: {}\r\n\r\n'.format(self.path).encode('utf-8'))
-        self.wfile.write(b'Headers\r\n')
-        self.wfile.write(b'-------\r\n')
+        self.send_header('Content-Length', len(response_body))
+        self.end_headers()
+
+        if write_response:
+            self.wfile.write(response_body.encode('utf-8'))
+
+    def do_HEAD(self):
+        self.do_GET(False)
+
+    def do_POST(self):
+        raise NotImplementedError()
+
+    def do_DELETE(self):
+        self._not_supported()
+
+    def do_PATCH(self):
+        self._not_supported()
+
+    def do_OPTIONS(self):
+        self._not_supported()
+
+    def send_response(self, code, message=None):
+        self.log_request(code)
+        self.send_response_only(code, message)
+        self.send_header('Server', 'Test HTTP Server for Haiku')
+        self.send_header('Date', 'Sun, 09 Feb 2020 19:32:42 GMT')
+
+    def _build_response_body(self):
+        output_stream = io.StringIO()
+        output_stream.write('Path: {}\r\n\r\n'.format(self.path))
+        output_stream.write('Headers\r\n')
+        output_stream.write('-------\r\n')
         for header in self.headers:
             for header_value in self.headers.get_all(header):
-                self.wfile.write('{}: {}\r\n'.format(header, header_value).encode('utf-8'))
+                output_stream.write('{}: {}\r\n'.format(header, header_value))
+        output_stream.write('Request body\r\n')
+        output_stream.write('------------\r\n')
+        output_stream.write(self.rfile.read())
+        return output_stream.getvalue()
+
+    def _not_supported(self):
+        self.send_response(405, '{} not supported'.format(self.command))
+        self.end_headers()
+        self.wfile.write('{} not supported\r\n'.format(self.command).encode('utf-8'))
 
 
 def main():
     options = parse_args(sys.argv)
 
-    bind_addr = ('127.0.0.1', options.port)
+    bind_addr = (options.bind_addr, options.port)
 
     if options.server_socket_fd:
         server = http.server.HTTPServer(bind_addr, RequestHandler, bind_and_activate=False)
@@ -60,6 +106,7 @@ def main():
 
 def parse_args(argv):
     parser = optparse.OptionParser(usage='Usage: %prog [OPTIONS]', description=__doc__)
+    parser.add_option('--bind-addr', default='127.0.0.1', dest='bind_addr', help='By default only bind to loopback')
     parser.add_option(
         '--use-tls',
         dest='use_tls',
