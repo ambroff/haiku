@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <cstdio>
+#include <fstream>
 
 #include <HttpRequest.h>
 #include <NetworkKit.h>
@@ -118,6 +119,19 @@ void SendAuthenticatedRequest(
 	CPPUNIT_ASSERT_EQUAL(49, result.Length());
 
 	listener.Verify();
+}
+
+
+void string_replace(
+	const std::string &from,
+	const std::string &to,
+	std::string &s)
+{
+	size_t pos = 0;
+	while ((pos = s.find(from, pos)) != std::string::npos) {
+		s.replace(pos, from.length(), to);
+		pos += to.length();
+	}
 }
 
 }
@@ -257,31 +271,80 @@ HttpTest::PortTest()
 void
 HttpTest::UploadTest()
 {
-	BUrl testUrl(fBaseUrl, "/post");
-	BUrlContext c;
-	BHttpRequest t(testUrl);
+	std::string fileContents;
+	{
+		std::ifstream inputStream("/system/data/licenses/MIT");
+		CPPUNIT_ASSERT(inputStream.is_open());
+		fileContents = std::string(
+			std::istreambuf_iterator<char>(inputStream),
+			std::istreambuf_iterator<char>());
 
-	t.SetContext(&c);
+		// Replace all \n with \\n and " with \"
+		string_replace("\n", "\\n", fileContents);
+		string_replace("\"", "\\\"", fileContents);
 
-	BHttpForm f;
-	f.AddString("hello", "world");
-	CPPUNIT_ASSERT(f.AddFile("_uploadfile", BPath("/system/data/licenses/MIT"))
-		== B_OK);
+		CPPUNIT_ASSERT(!fileContents.empty());
+	}
 
-	t.SetPostFields(f);
+	std::string expectedResponseBody(
+		"{\n"
+		"  \"args\": {}, \n"
+		"  \"data\": \"\", \n"
+		"  \"files\": {\n"
+		"    \"_uploadfile\": \"" + fileContents + "\"\n"
+		"  }, \n"
+		"  \"form\": {\n"
+		"    \"hello\": \"world\"\n"
+		"  }, \n"
+		"  \"headers\": {\n"
+		"    \"Accept\": \"*/*\", \n"
+		"    \"Accept-Encoding\": \"gzip\", \n"
+		"    \"Connection\": \"close\", \n"
+		"    \"Content-Length\": \"1395\", \n"
+		"    \"Content-Type\": \"multipart/form-data; boundary=----------------------------5601639651989373\", \n"
+		"    \"Host\": \"127.0.0.1:8080\", \n"
+		"    \"User-Agent\": \"Services Kit (Haiku)\"\n"
+		"  }, \n"
+		"  \"json\": null, \n"
+		"  \"origin\": \"127.0.0.1\", \n"
+		"  \"url\": \"http://127.0.0.l1:8080/post\"\n"
+		"}\n");
+    HttpHeaderMap expectedResponseHeaders;
+    expectedResponseHeaders["Access-Control-Allow-Credentials"] = "true";
+    expectedResponseHeaders["Access-Control-Allow-Origin"] = "*";
+    expectedResponseHeaders["Content-Length"] = "1651";
+    expectedResponseHeaders["Content-Type"] = "application/json";
+    expectedResponseHeaders["Date"] = "";
+    expectedResponseHeaders["Server"] = "Werkzeug/1.0.0 Python/3.7.6";
+    TestListener listener(expectedResponseBody, expectedResponseHeaders);
 
-	CPPUNIT_ASSERT(t.Run());
+    BUrl testUrl(fBaseUrl, "/post");
 
-	while (t.IsRunning())
-		snooze(10);
+    BUrlContext context;
+    BHttpRequest request(testUrl, false, "HTTP", &listener, &context);
 
-	CPPUNIT_ASSERT_EQUAL(B_OK, t.Status());
+    BHttpForm form;
+    form.AddString("hello", "world");
+    CPPUNIT_ASSERT_EQUAL(
+        B_OK, form.AddFile("_uploadfile", BPath("/system/data/licenses/MIT")));
 
-	const BHttpResult& r = dynamic_cast<const BHttpResult&>(t.Result());
-	CPPUNIT_ASSERT_EQUAL(200, r.StatusCode());
-	CPPUNIT_ASSERT_EQUAL(BString("OK"), r.StatusText());
-	CPPUNIT_ASSERT_EQUAL(466, r.Length());
-		// Fixed size as we know the response format.
+    request.SetPostFields(form);
+
+    CPPUNIT_ASSERT(request.Run());
+
+    while (request.IsRunning())
+      snooze(10);
+
+    CPPUNIT_ASSERT_EQUAL(B_OK, request.Status());
+
+    const BHttpResult &result =
+        dynamic_cast<const BHttpResult &>(request.Result());
+    CPPUNIT_ASSERT_EQUAL(200, result.StatusCode());
+    CPPUNIT_ASSERT_EQUAL(BString("OK"), result.StatusText());
+    CPPUNIT_ASSERT_EQUAL(1651, result.Length());
+    // Fixed size as we know the response format.
+
+    listener.Verify();
 }
 
 
