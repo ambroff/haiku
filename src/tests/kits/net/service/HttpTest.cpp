@@ -220,58 +220,12 @@ HttpTest::ProxyTest()
 	CPPUNIT_ASSERT_EQUAL(B_OK, t.Status());
 
 	const BHttpResult& r = dynamic_cast<const BHttpResult&>(t.Result());
-
-printf("%s\n", r.StatusText().String());
-
 	CPPUNIT_ASSERT_EQUAL(200, r.StatusCode());
 	CPPUNIT_ASSERT_EQUAL(BString("OK"), r.StatusText());
 	CPPUNIT_ASSERT_EQUAL(42, r.Length());
-		// Fixed size as we know the response format.
 	CPPUNIT_ASSERT(!c->GetCookieJar().GetIterator().HasNext());
-		// This page should not set cookies
 
 	c->ReleaseReference();
-}
-
-
-class PortTestListener: public BUrlProtocolListener
-{
-public:
-	virtual			~PortTestListener() {};
-
-			void	DataReceived(BUrlRequest*, const char* data, off_t,
-						ssize_t size)
-			{
-				fResult.Append(data, size);
-			}
-
-	BString fResult;
-};
-
-
-void
-HttpTest::PortTest()
-{
-	BUrl testUrl("http://portquiz.net:4242");
-	BHttpRequest t(testUrl);
-
-	// portquiz returns more easily parseable results when UA is Wget...
-	t.SetUserAgent("Wget/1.15 (haiku testsuite)");
-
-	PortTestListener listener;
-	t.SetListener(&listener);
-
-	CPPUNIT_ASSERT(t.Run());
-
-	while (t.IsRunning())
-		snooze(10);
-
-	CPPUNIT_ASSERT_EQUAL(B_OK, t.Status());
-
-	const BHttpResult& r = dynamic_cast<const BHttpResult&>(t.Result());
-	CPPUNIT_ASSERT_EQUAL(200, r.StatusCode());
-
-	CPPUNIT_ASSERT(listener.fResult.StartsWith("Port 4242 test successful!"));
 }
 
 
@@ -447,10 +401,6 @@ HttpTest::AddTests(BTestSuite& parent)
 
 		// HTTP + HTTPs
 		_AddCommonTests<HttpTest>("HttpTest::", suite);
-
-		// HTTP-only
-		suite.addTest(new CppUnit::TestCaller<HttpTest>(
-			"HttpTest::PortTest", &HttpTest::PortTest));
 
 		// TODO: reaches out to some mysterious IP 120.203.214.182 which does
 		// not respond anymore?

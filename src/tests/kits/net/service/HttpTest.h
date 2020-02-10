@@ -25,7 +25,6 @@ public:
 	virtual								~HttpTest();
 
 								void	GetTest();
-								void	PortTest();
 								void	UploadTest();
 								void	AuthBasicTest();
 								void	AuthDigestTest();
