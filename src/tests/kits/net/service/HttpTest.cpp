@@ -68,10 +68,6 @@ public:
 			 iter != fActualResponseHeaders.end();
 			 ++iter)
 		{
-			// FIXME: Remove this
-			if (iter->first == "Date" || iter->first == "Www-Authenticate") {
-				continue;
-			}
 			CPPUNIT_ASSERT_EQUAL_MESSAGE(
 				"(header " + iter->first + ")",
 				fExpectedResponseHeaders[iter->first],
@@ -121,19 +117,6 @@ void SendAuthenticatedRequest(
 	listener.Verify();
 }
 
-
-void string_replace(
-	const std::string &from,
-	const std::string &to,
-	std::string &s)
-{
-	size_t pos = 0;
-	while ((pos = s.find(from, pos)) != std::string::npos) {
-		s.replace(pos, from.length(), to);
-		pos += to.length();
-	}
-}
-
 }
 
 
@@ -167,11 +150,10 @@ HttpTest::GetTest()
 		"Connection: close\r\n"
 		"User-Agent: Services Kit (Haiku)\r\n");
 	HttpHeaderMap expectedResponseHeaders;
-	expectedResponseHeaders["Content-Type"] = "text/plain";
 	expectedResponseHeaders["Content-Length"] = "143";
-	expectedResponseHeaders["Access-Control-Allow-Origin"] = "*";
-	expectedResponseHeaders["Access-Control-Allow-Credentials"] = "true";
-	expectedResponseHeaders["Server"] = "Werkzeug/1.0.0 Python/3.7.6";
+	expectedResponseHeaders["Content-Type"] = "text/plain";
+	expectedResponseHeaders["Date"] = "Sun, 09 Feb 2020 19:32:42 GMT";
+	expectedResponseHeaders["Server"] = "Test HTTP Server for Haiku";
 	TestListener listener(expectedResponseBody, expectedResponseHeaders);
 
 	BHttpRequest request(testUrl, false, "HTTP", &listener, context);
@@ -239,44 +221,38 @@ HttpTest::UploadTest()
 		fileContents = std::string(
 			std::istreambuf_iterator<char>(inputStream),
 			std::istreambuf_iterator<char>());
-
-		// Replace all \n with \\n and " with \"
-		string_replace("\n", "\\n", fileContents);
-		string_replace("\"", "\\\"", fileContents);
-
 		CPPUNIT_ASSERT(!fileContents.empty());
 	}
 
 	std::string expectedResponseBody(
-		"{\n"
-		"  \"args\": {}, \n"
-		"  \"data\": \"\", \n"
-		"  \"files\": {\n"
-		"    \"_uploadfile\": \"" + fileContents + "\"\n"
-		"  }, \n"
-		"  \"form\": {\n"
-		"    \"hello\": \"world\"\n"
-		"  }, \n"
-		"  \"headers\": {\n"
-		"    \"Accept\": \"*/*\", \n"
-		"    \"Accept-Encoding\": \"gzip\", \n"
-		"    \"Connection\": \"close\", \n"
-		"    \"Content-Length\": \"1395\", \n"
-		"    \"Content-Type\": \"multipart/form-data; boundary=----------------------------5601639651989373\", \n"
-		"    \"Host\": \"127.0.0.1:8080\", \n"
-		"    \"User-Agent\": \"Services Kit (Haiku)\"\n"
-		"  }, \n"
-		"  \"json\": null, \n"
-		"  \"origin\": \"127.0.0.1\", \n"
-		"  \"url\": \"http://127.0.0.l1:8080/post\"\n"
-		"}\n");
+		"Path: /post\r\n"
+		"\r\n"
+		"Headers:\r\n"
+		"--------\r\n"
+		"Host: 192.168.1.17:9090\r\n"
+		"Accept: */*\r\n"
+		"Accept-Encoding: gzip\r\n"
+		"Connection: close\r\n"
+		"User-Agent: Services Kit (Haiku)\r\n"
+		"Content-Type: multipart/form-data; boundary=------------------------"
+		"----<<BOUNDARY-ID>>\r\n"
+		"Content-Length: 1409\r\n"
+		"\r\n"
+		"Response body (1409 bytes)\r\n"
+		"--------------------------\r\n"
+		"------------------------------<<BOUNDARY-ID>>\r\n"
+		"Content-Disposition: form-data; name=\"_uploadfile\";"
+		" filename=\"MIT\"\r\n"
+		"Content-Type: locale/x-vnd.Be.locale-catalog.default\r\n"
+		"\r\n"
+		+ fileContents);
     HttpHeaderMap expectedResponseHeaders;
     expectedResponseHeaders["Access-Control-Allow-Credentials"] = "true";
     expectedResponseHeaders["Access-Control-Allow-Origin"] = "*";
-    expectedResponseHeaders["Content-Length"] = "1651";
-    expectedResponseHeaders["Content-Type"] = "application/json";
-    expectedResponseHeaders["Date"] = "";
-    expectedResponseHeaders["Server"] = "Werkzeug/1.0.0 Python/3.7.6";
+    expectedResponseHeaders["Content-Length"] = "1726";
+    expectedResponseHeaders["Content-Type"] = "text/plain";
+    expectedResponseHeaders["Date"] = "Sun, 09 Feb 2020 19:32:42 GMT";
+    expectedResponseHeaders["Server"] = "Test HTTP Server for Haiku";
     TestListener listener(expectedResponseBody, expectedResponseHeaders);
 
     BUrl testUrl(fBaseUrl, "/post");
@@ -302,8 +278,7 @@ HttpTest::UploadTest()
         dynamic_cast<const BHttpResult &>(request.Result());
     CPPUNIT_ASSERT_EQUAL(200, result.StatusCode());
     CPPUNIT_ASSERT_EQUAL(BString("OK"), result.StatusText());
-    CPPUNIT_ASSERT_EQUAL(1651, result.Length());
-    // Fixed size as we know the response format.
+    CPPUNIT_ASSERT_EQUAL(1726, result.Length());
 
     listener.Verify();
 }
@@ -322,7 +297,7 @@ HttpTest::AuthBasicTest()
 	expectedResponseHeaders["Content-Length"] = "49";
 	expectedResponseHeaders["Content-Type"] = "application/json";
 	expectedResponseHeaders["Date"] = "";
-	expectedResponseHeaders["Server"] = "Werkzeug/1.0.0 Python/3.7.6";
+	expectedResponseHeaders["Server"] = "Test HTTP Server for Haiku";
 	expectedResponseHeaders["Www-Authenticate"] = "Basic realm=\"Fake Realm\"";
 
 	SendAuthenticatedRequest(context, testUrl, expectedResponseHeaders);
@@ -345,7 +320,7 @@ HttpTest::AuthDigestTest()
 	expectedResponseHeaders["Content-Length"] = "49";
 	expectedResponseHeaders["Content-Type"] = "application/json";
 	expectedResponseHeaders["Date"] = "";
-	expectedResponseHeaders["Server"] = "Werkzeug/1.0.0 Python/3.7.6";
+	expectedResponseHeaders["Server"] = "Test HTTP Server for Haiku";
 	expectedResponseHeaders["Set-Cookie"] = "stale_after=never; Path=/";
 	expectedResponseHeaders["Www-Authenticate"]
 		= "Digest realm=\"me@kennethreitz.com\", "
