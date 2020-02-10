@@ -2,8 +2,6 @@
 HTTP(S) server used for integration testing of ServicesKit.
 
 This service receives HTTP requests and just echos them back in the response.
-
-TODO: Handle Accept-Encoding.
 """
 
 import optparse
@@ -14,6 +12,9 @@ import socket
 import io
 import re
 import base64
+import gzip
+import zlib
+import abc
 
 
 MULTIPART_FORM_BOUNDARY_RE = re.compile(r'^multipart/form-data; boundary=(----------------------------\d+)$')
@@ -49,15 +50,17 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
         if self._authorize():
             return
 
-        response_body = self._build_response_body()
+        encoding, response_body = self._build_response_body()
 
         self.send_response(extract_desired_status_code_from_path(self.path, 200))
         self.send_header('Content-Type', 'text/plain')
-        self.send_header('Content-Length', len(response_body))
+        self.send_header('Content-Length', str(len(response_body)))
+        if encoding:
+            self.send_header('Content-Encoding', encoding)
         self.end_headers()
 
         if write_response:
-            self.wfile.write(response_body.encode('utf-8'))
+            self.wfile.write(response_body)
 
     def do_HEAD(self):
         self.do_GET(False)
@@ -66,12 +69,14 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
         if self._authorize():
             return
 
-        response_body = self._build_response_body()
+        encoding, response_body = self._build_response_body()
         self.send_response(extract_desired_status_code_from_path(self.path, 200))
         self.send_header('Content-Type', 'text/plain')
-        self.send_header('Content-Length', len(response_body))
+        self.send_header('Content-Length', str(len(response_body)))
+        if encoding:
+            self.send_header('Content-Encoding', encoding)
         self.end_headers()
-        self.wfile.write(response_body.encode('utf-8'))
+        self.wfile.write(response_body)
 
     def do_DELETE(self):
         self._not_supported()
@@ -91,13 +96,25 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
     def _build_response_body(self):
         # The post-body may be multi-part/form-data, in which case the client will have generated some
         # random identifier to identify the boundary. If that's the case, we'll replace it here in order to allow
-        # the test client to validate the response data without needing to predict the boundary identifier.
+        # the test client to validate the response data without needing to predict the boundary identifier. This makes
+        # the response body deterministic even though the boundary will change with every request, and lets the tests
+        # in HttpTests hard-code the entire expected response body for validation.
         boundary_id_value = None
 
-        output_stream = io.StringIO()
-        output_stream.write('Path: {}\r\n\r\n'.format(self.path))
-        output_stream.write('Headers:\r\n')
-        output_stream.write('--------\r\n')
+        supported_encodings = [e.strip() for e in self.headers.get('Accept-Encoding', '').split(',') if e.strip()]
+        if 'gzip' in supported_encodings:
+            encoding = 'gzip'
+            output_stream = GzipResponseBodyBuilder()
+        elif 'deflate' in supported_encodings:
+            encoding = 'deflate'
+            output_stream = DeflateResponseBodyBuilder()
+        else:
+            encoding = None
+            output_stream = RawResponseBodyBuilder()
+
+        output_stream.write('Path: {}\r\n\r\n'.format(self.path).encode('utf-8'))
+        output_stream.write(b'Headers:\r\n')
+        output_stream.write(b'--------\r\n')
         for header in self.headers:
             for header_value in self.headers.get_all(header):
                 if header == 'Content-Type':
@@ -105,21 +122,22 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                     if match is not None:
                         boundary_id_value = match.group(1)
                         header_value = header_value.replace(boundary_id_value, '<<BOUNDARY-ID>>')
-                output_stream.write('{}: {}\r\n'.format(header, header_value))
+                output_stream.write('{}: {}\r\n'.format(header, header_value).encode('utf-8'))
 
         content_length = int(self.headers.get('Content-Length', 0))
         if content_length > 0:
-            output_stream.write('\r\n')
-            output_stream.write('Request body:\r\n')
-            output_stream.write('-------------\r\n')
+            output_stream.write(b'\r\n')
+            output_stream.write(b'Request body:\r\n')
+            output_stream.write(b'-------------\r\n')
 
             body_bytes = self.rfile.read(content_length).decode('utf-8')
             if boundary_id_value:
                 body_bytes = body_bytes.replace(boundary_id_value, '<<BOUNDARY-ID>>')
 
-            output_stream.write(body_bytes)
-            output_stream.write('\r\n')
-        return output_stream.getvalue()
+            output_stream.write(body_bytes.encode('utf-8'))
+            output_stream.write(b'\r\n')
+
+        return encoding, output_stream.get_bytes()
 
     def _not_supported(self):
         self.send_response(405, '{} not supported'.format(self.command))
@@ -161,6 +179,53 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
             raise NotImplementedError('Unimplemented authorization strategy ' + strategy)
 
         return False
+
+
+class ResponseBodyBuilder(object):
+    __meta__ = abc.ABCMeta
+
+    @abc.abstractmethod
+    def write(self, bytes):
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def get_bytes(self):
+        raise NotImplementedError()
+
+
+class RawResponseBodyBuilder(ResponseBodyBuilder):
+    def __init__(self):
+        self.buf = io.BytesIO()
+
+    def write(self, bytes):
+        self.buf.write(bytes)
+
+    def get_bytes(self):
+        return self.buf.getvalue()
+
+
+class GzipResponseBodyBuilder(ResponseBodyBuilder):
+    def __init__(self):
+        self.buf = io.BytesIO()
+        self.compressor = gzip.GzipFile(mode='wb', compresslevel=4, fileobj=self.buf)
+
+    def write(self, bytes):
+        self.compressor.write(bytes)
+
+    def get_bytes(self):
+        self.compressor.close()
+        return self.buf.getvalue()
+
+
+class DeflateResponseBodyBuilder(ResponseBodyBuilder):
+    def __init__(self):
+        self.raw = RawResponseBodyBuilder()
+
+    def write(self, bytes):
+        self.raw.write(bytes)
+
+    def get_bytes(self):
+        return zlib.compress(self.raw.get_bytes())
 
 
 def main():
