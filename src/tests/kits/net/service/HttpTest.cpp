@@ -150,7 +150,8 @@ HttpTest::GetTest()
 		"Connection: close\r\n"
 		"User-Agent: Services Kit (Haiku)\r\n");
 	HttpHeaderMap expectedResponseHeaders;
-	expectedResponseHeaders["Content-Length"] = "145";
+	expectedResponseHeaders["Content-Encoding"] = "gzip";
+	expectedResponseHeaders["Content-Length"] = "147";
 	expectedResponseHeaders["Content-Type"] = "text/plain";
 	expectedResponseHeaders["Date"] = "Sun, 09 Feb 2020 19:32:42 GMT";
 	expectedResponseHeaders["Server"] = "Test HTTP Server for Haiku";
@@ -168,7 +169,7 @@ HttpTest::GetTest()
 	CPPUNIT_ASSERT_EQUAL(200, result.StatusCode());
 	CPPUNIT_ASSERT_EQUAL(BString("OK"), result.StatusText());
 
-	CPPUNIT_ASSERT_EQUAL(145, result.Length());
+	CPPUNIT_ASSERT_EQUAL(147, result.Length());
 
 	listener.Verify();
 
@@ -264,7 +265,8 @@ HttpTest::UploadTest()
 		"--<<BOUNDARY-ID>>--\r\n"
 		"\r\n");
 	HttpHeaderMap expectedResponseHeaders;
-	expectedResponseHeaders["Content-Length"] = "1588";
+	expectedResponseHeaders["Content-Encoding"] = "gzip";
+	expectedResponseHeaders["Content-Length"] = "925";
 	expectedResponseHeaders["Content-Type"] = "text/plain";
 	expectedResponseHeaders["Date"] = "Sun, 09 Feb 2020 19:32:42 GMT";
 	expectedResponseHeaders["Server"] = "Test HTTP Server for Haiku";
@@ -294,7 +296,7 @@ HttpTest::UploadTest()
 		dynamic_cast<const BHttpResult &>(request.Result());
 	CPPUNIT_ASSERT_EQUAL(200, result.StatusCode());
 	CPPUNIT_ASSERT_EQUAL(BString("OK"), result.StatusText());
-	CPPUNIT_ASSERT_EQUAL(1588, result.Length());
+	CPPUNIT_ASSERT_EQUAL(925, result.Length());
 
 	listener.Verify();
 }
