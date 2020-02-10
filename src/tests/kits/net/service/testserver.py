@@ -48,7 +48,11 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
         self.do_GET(False)
 
     def do_POST(self):
-        raise NotImplementedError()
+        response_body = self._build_response_body()
+        self.send_response(extract_desired_status_code_from_path(self.path, 200))
+        self.send_header('Content-Length', len(response_body))
+        self.end_headers()
+        self.wfile.write(response_body.encode('utf-8'))
 
     def do_DELETE(self):
         self._not_supported()
@@ -73,9 +77,16 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
         for header in self.headers:
             for header_value in self.headers.get_all(header):
                 output_stream.write('{}: {}\r\n'.format(header, header_value))
-        output_stream.write('Request body\r\n')
-        output_stream.write('------------\r\n')
-        output_stream.write(self.rfile.read())
+
+        content_length = int(self.headers.get('Content-Length', 0))
+        if content_length > 0:
+            section_header = 'Request body ({} bytes)'.format(content_length)
+            output_stream.write('\r\n{}\r\n'.format(section_header))
+            output_stream.write('{}\r\n'.format('-' * len(section_header)))
+            body_bytes = self.rfile.read(content_length)
+            print(body_bytes)
+            output_stream.write(body_bytes.decode('utf-8'))
+            output_stream.write('\r\n')
         return output_stream.getvalue()
 
     def _not_supported(self):
