@@ -12,6 +12,10 @@ import sys
 import http.server
 import socket
 import io
+import re
+
+
+MULTIPART_FORM_BOUNDARY_RE = re.compile(r'^multipart/form-data; boundary=(----------------------------\d+)$')
 
 
 def extract_desired_status_code_from_path(path, default=200):
@@ -50,6 +54,7 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         response_body = self._build_response_body()
         self.send_response(extract_desired_status_code_from_path(self.path, 200))
+        self.send_header('Content-Type', 'text/plain')
         self.send_header('Content-Length', len(response_body))
         self.end_headers()
         self.wfile.write(response_body.encode('utf-8'))
@@ -70,22 +75,35 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
         self.send_header('Date', 'Sun, 09 Feb 2020 19:32:42 GMT')
 
     def _build_response_body(self):
+        # The post-body may be multi-part/form-data, in which case the client will have generated some
+        # random identifier to identify the boundary. If that's the case, we'll replace it here in order to allow
+        # the test client to validate the response data without needing to predict the boundary identifier.
+        boundary_id_value = None
+
         output_stream = io.StringIO()
         output_stream.write('Path: {}\r\n\r\n'.format(self.path))
-        output_stream.write('Headers\r\n')
-        output_stream.write('-------\r\n')
+        output_stream.write('Headers:\r\n')
+        output_stream.write('--------\r\n')
         for header in self.headers:
             for header_value in self.headers.get_all(header):
+                if header == 'Content-Type':
+                    match = MULTIPART_FORM_BOUNDARY_RE.match(self.headers.get('Content-Type', 'text/plain'))
+                    if match is not None:
+                        boundary_id_value = match.group(1)
+                        header_value = header_value.replace(boundary_id_value, '<<BOUNDARY-ID>>')
                 output_stream.write('{}: {}\r\n'.format(header, header_value))
 
         content_length = int(self.headers.get('Content-Length', 0))
         if content_length > 0:
-            section_header = 'Request body ({} bytes)'.format(content_length)
-            output_stream.write('\r\n{}\r\n'.format(section_header))
-            output_stream.write('{}\r\n'.format('-' * len(section_header)))
-            body_bytes = self.rfile.read(content_length)
-            print(body_bytes)
-            output_stream.write(body_bytes.decode('utf-8'))
+            output_stream.write('\r\n')
+            output_stream.write('Request body:\r\n')
+            output_stream.write('-------------\r\n')
+
+            body_bytes = self.rfile.read(content_length).decode('utf-8')
+            if boundary_id_value:
+                body_bytes = body_bytes.replace(boundary_id_value, '<<BOUNDARY-ID>>')
+
+            output_stream.write(body_bytes)
             output_stream.write('\r\n')
         return output_stream.getvalue()
 
