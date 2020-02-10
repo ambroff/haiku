@@ -142,15 +142,15 @@ HttpTest::GetTest()
 	std::string expectedResponseBody(
 		"Path: /\r\n"
 		"\r\n"
-		"Headers\r\n"
-		"-------\r\n"
+		"Headers:\r\n"
+		"--------\r\n"
 		"Host: 192.168.1.17:9090\r\n"
 		"Accept: */*\r\n"
 		"Accept-Encoding: gzip\r\n"
 		"Connection: close\r\n"
 		"User-Agent: Services Kit (Haiku)\r\n");
 	HttpHeaderMap expectedResponseHeaders;
-	expectedResponseHeaders["Content-Length"] = "143";
+	expectedResponseHeaders["Content-Length"] = "145";
 	expectedResponseHeaders["Content-Type"] = "text/plain";
 	expectedResponseHeaders["Date"] = "Sun, 09 Feb 2020 19:32:42 GMT";
 	expectedResponseHeaders["Server"] = "Test HTTP Server for Haiku";
@@ -168,7 +168,7 @@ HttpTest::GetTest()
 	CPPUNIT_ASSERT_EQUAL(200, result.StatusCode());
 	CPPUNIT_ASSERT_EQUAL(BString("OK"), result.StatusText());
 
-	CPPUNIT_ASSERT_EQUAL(143, result.Length());
+	CPPUNIT_ASSERT_EQUAL(145, result.Length());
 
 	listener.Verify();
 
@@ -214,6 +214,9 @@ HttpTest::ProxyTest()
 void
 HttpTest::UploadTest()
 {
+	// The test server will echo the POST body back to us in the HTTP response,
+	// so here we load it into memory so that we can compare to make sure that
+	// the server received it.
 	std::string fileContents;
 	{
 		std::ifstream inputStream("/system/data/licenses/MIT");
@@ -222,6 +225,8 @@ HttpTest::UploadTest()
 			std::istreambuf_iterator<char>(inputStream),
 			std::istreambuf_iterator<char>());
 		CPPUNIT_ASSERT(!fileContents.empty());
+
+		// The server
 	}
 
 	std::string expectedResponseBody(
@@ -237,18 +242,23 @@ HttpTest::UploadTest()
 		"Content-Type: multipart/form-data; boundary=<<BOUNDARY-ID>>\r\n"
 		"Content-Length: 1409\r\n"
 		"\r\n"
-		"Response body (1409 bytes)\r\n"
-		"--------------------------\r\n"
+		"Request body:\r\n"
+		"-------------\r\n"
 		"--<<BOUNDARY-ID>>\r\n"
 		"Content-Disposition: form-data; name=\"_uploadfile\";"
 		" filename=\"MIT\"\r\n"
 		"Content-Type: locale/x-vnd.Be.locale-catalog.default\r\n"
 		"\r\n"
-		+ fileContents);
+		+ fileContents
+		+ "\r\n"
+		"--<<BOUNDARY-ID>>\r\n"
+		"Content-Disposition: form-data; name=\"hello\"\r\n"
+		"\r\n"
+		"world\r\n"
+		"--<<BOUNDARY-ID>>--\r\n"
+		"\r\n");
     HttpHeaderMap expectedResponseHeaders;
-    expectedResponseHeaders["Access-Control-Allow-Credentials"] = "true";
-    expectedResponseHeaders["Access-Control-Allow-Origin"] = "*";
-    expectedResponseHeaders["Content-Length"] = "1610";
+    expectedResponseHeaders["Content-Length"] = "1588";
     expectedResponseHeaders["Content-Type"] = "text/plain";
     expectedResponseHeaders["Date"] = "Sun, 09 Feb 2020 19:32:42 GMT";
     expectedResponseHeaders["Server"] = "Test HTTP Server for Haiku";
@@ -277,7 +287,7 @@ HttpTest::UploadTest()
         dynamic_cast<const BHttpResult &>(request.Result());
     CPPUNIT_ASSERT_EQUAL(200, result.StatusCode());
     CPPUNIT_ASSERT_EQUAL(BString("OK"), result.StatusText());
-    CPPUNIT_ASSERT_EQUAL(1610, result.Length());
+    CPPUNIT_ASSERT_EQUAL(1588, result.Length());
 
     listener.Verify();
 }
