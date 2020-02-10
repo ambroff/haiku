@@ -234,13 +234,12 @@ HttpTest::UploadTest()
 		"Accept-Encoding: gzip\r\n"
 		"Connection: close\r\n"
 		"User-Agent: Services Kit (Haiku)\r\n"
-		"Content-Type: multipart/form-data; boundary=------------------------"
-		"----<<BOUNDARY-ID>>\r\n"
+		"Content-Type: multipart/form-data; boundary=<<BOUNDARY-ID>>\r\n"
 		"Content-Length: 1409\r\n"
 		"\r\n"
 		"Response body (1409 bytes)\r\n"
 		"--------------------------\r\n"
-		"------------------------------<<BOUNDARY-ID>>\r\n"
+		"--<<BOUNDARY-ID>>\r\n"
 		"Content-Disposition: form-data; name=\"_uploadfile\";"
 		" filename=\"MIT\"\r\n"
 		"Content-Type: locale/x-vnd.Be.locale-catalog.default\r\n"
@@ -249,7 +248,7 @@ HttpTest::UploadTest()
     HttpHeaderMap expectedResponseHeaders;
     expectedResponseHeaders["Access-Control-Allow-Credentials"] = "true";
     expectedResponseHeaders["Access-Control-Allow-Origin"] = "*";
-    expectedResponseHeaders["Content-Length"] = "1726";
+    expectedResponseHeaders["Content-Length"] = "1610";
     expectedResponseHeaders["Content-Type"] = "text/plain";
     expectedResponseHeaders["Date"] = "Sun, 09 Feb 2020 19:32:42 GMT";
     expectedResponseHeaders["Server"] = "Test HTTP Server for Haiku";
@@ -278,7 +277,7 @@ HttpTest::UploadTest()
         dynamic_cast<const BHttpResult &>(request.Result());
     CPPUNIT_ASSERT_EQUAL(200, result.StatusCode());
     CPPUNIT_ASSERT_EQUAL(BString("OK"), result.StatusText());
-    CPPUNIT_ASSERT_EQUAL(1726, result.Length());
+    CPPUNIT_ASSERT_EQUAL(1610, result.Length());
 
     listener.Verify();
 }
