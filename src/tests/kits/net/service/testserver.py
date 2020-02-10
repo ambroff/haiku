@@ -2,6 +2,9 @@
 HTTP(S) server used for integration testing of ServicesKit.
 
 This service receives HTTP requests and just echos them back in the response.
+
+This is intentionally not using any fancy frameworks or libraries so as to not require any dependencies, and also to
+allow for adding endpoints to replicate behavior of other servers in the future.
 """
 
 import optparse
@@ -34,9 +37,6 @@ def extract_desired_status_code_from_path(path, default=200):
 
 
 class RequestHandler(http.server.BaseHTTPRequestHandler):
-    def __init__(self, *args, **kwargs):
-        super(RequestHandler, self).__init__(*args, **kwargs)
-        self.extra_headers = []
 
     def do_GET(self, write_response=True):
         """
@@ -47,7 +47,8 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
         status codes as expected per RFC, such as having an empty response body for 201 response, only the functionality
         that is required to handle requests from HttpTests is implemented.
         """
-        if self._authorize():
+        authorized, extra_headers = self._authorize()
+        if not authorized:
             return
 
         encoding, response_body = self._build_response_body()
@@ -57,6 +58,8 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
         self.send_header('Content-Length', str(len(response_body)))
         if encoding:
             self.send_header('Content-Encoding', encoding)
+        for header_name, header_value in extra_headers:
+            self.send_header(header_name, header_value)
         self.end_headers()
 
         if write_response:
@@ -66,7 +69,8 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
         self.do_GET(False)
 
     def do_POST(self):
-        if self._authorize():
+        authorized, extra_headers = self._authorize()
+        if not authorized:
             return
 
         encoding, response_body = self._build_response_body()
@@ -75,6 +79,9 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
         self.send_header('Content-Length', str(len(response_body)))
         if encoding:
             self.send_header('Content-Encoding', encoding)
+        for header_name, header_value in extra_headers:
+            self.send_header(header_name, header_value)
+
         self.end_headers()
         self.wfile.write(response_body)
 
@@ -149,9 +156,12 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
         Authorizes the request. If True is returned that means that the request was not authorized and the 4xx response
         has been send to the client.
         """
+        # We only authorize paths like /auth/<strategy>/<expected-username>/<expected-password>
         match = AUTH_PATH_RE.match(self.path)
         if match is None:
-            return False
+            return True, []
+
+        extra_headers = []
 
         strategy = match.group('strategy')
         expected_username = match.group('username')
@@ -161,24 +171,32 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
             authorization = self.headers.get('Authorization', None)
             if authorization is None:
                 self.send_response(401, 'Not authorized')
+                self.send_header('Www-Authenticate', 'Basic realm="Fake Realm"')
                 self.end_headers()
-                return True
+                return False, extra_headers
 
-            decoded = base64.decodebytes(authorization)
-            username, password = decoded.split(':')
+            auth_type, encoded_credentials = authorization.split()
+            if auth_type != 'Basic':
+                self.send_response(401, 'Not authorized')
+                self.send_header('Www-Authenticate', 'Basic realm="Fake Realm"')
+                self.end_headers()
+                return False, extra_headers
+
+            decoded = base64.decodebytes(encoded_credentials.encode('utf-8'))
+            username, password = decoded.decode('utf-8').split(':')
 
             if username != expected_username or password != expected_password:
                 self.send_response(401, 'Not authorized')
                 self.end_headers()
-                return True
+                return False, extra_headers
 
-            self.extra_headers.append(('Www-Authenticate', 'Basic realm="Fake realm"'))
+            extra_headers.append(('Www-Authenticate', 'Basic realm="Fake Realm"'))
         elif strategy == 'digest':
             pass
         else:
             raise NotImplementedError('Unimplemented authorization strategy ' + strategy)
 
-        return False
+        return True, extra_headers
 
 
 class ResponseBodyBuilder(object):
