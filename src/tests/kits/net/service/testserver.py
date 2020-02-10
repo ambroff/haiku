@@ -13,9 +13,13 @@ import http.server
 import socket
 import io
 import re
+import base64
 
 
 MULTIPART_FORM_BOUNDARY_RE = re.compile(r'^multipart/form-data; boundary=(----------------------------\d+)$')
+AUTH_PATH_RE = re.compile(
+    r'^/auth/(?P<strategy>(basic|digest))/(?P<username>[a-z0-9]+)/(?P<password>[a-z0-9]+)',
+    re.IGNORECASE)
 
 
 def extract_desired_status_code_from_path(path, default=200):
@@ -29,6 +33,10 @@ def extract_desired_status_code_from_path(path, default=200):
 
 
 class RequestHandler(http.server.BaseHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+        super(RequestHandler, self).__init__(*args, **kwargs)
+        self.extra_headers = []
+
     def do_GET(self, write_response=True):
         """
         Any GET request just gets echoed back to the sender. If the path ends with a numeric component like "/404" or
@@ -38,6 +46,9 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
         status codes as expected per RFC, such as having an empty response body for 201 response, only the functionality
         that is required to handle requests from HttpTests is implemented.
         """
+        if self._authorize():
+            return
+
         response_body = self._build_response_body()
 
         self.send_response(extract_desired_status_code_from_path(self.path, 200))
@@ -52,6 +63,9 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
         self.do_GET(False)
 
     def do_POST(self):
+        if self._authorize():
+            return
+
         response_body = self._build_response_body()
         self.send_response(extract_desired_status_code_from_path(self.path, 200))
         self.send_header('Content-Type', 'text/plain')
@@ -111,6 +125,42 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
         self.send_response(405, '{} not supported'.format(self.command))
         self.end_headers()
         self.wfile.write('{} not supported\r\n'.format(self.command).encode('utf-8'))
+
+    def _authorize(self):
+        """
+        Authorizes the request. If True is returned that means that the request was not authorized and the 4xx response
+        has been send to the client.
+        """
+        match = AUTH_PATH_RE.match(self.path)
+        if match is None:
+            return False
+
+        strategy = match.group('strategy')
+        expected_username = match.group('username')
+        expected_password = match.group('password')
+
+        if strategy == 'basic':
+            authorization = self.headers.get('Authorization', None)
+            if authorization is None:
+                self.send_response(401, 'Not authorized')
+                self.end_headers()
+                return True
+
+            decoded = base64.decodebytes(authorization)
+            username, password = decoded.split(':')
+
+            if username != expected_username or password != expected_password:
+                self.send_response(401, 'Not authorized')
+                self.end_headers()
+                return True
+
+            self.extra_headers.append(('Www-Authenticate', 'Basic realm="Fake realm"'))
+        elif strategy == 'digest':
+            pass
+        else:
+            raise NotImplementedError('Unimplemented authorization strategy ' + strategy)
+
+        return False
 
 
 def main():
