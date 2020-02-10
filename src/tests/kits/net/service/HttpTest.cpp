@@ -91,10 +91,17 @@ void SendAuthenticatedRequest(
 	const HttpHeaderMap &expectedResponseHeaders)
 {
 	std::string expectedResponseBody(
-		"{\n"
-		"  \"authenticated\": true, \n"
-		"  \"user\": \"walter\"\n"
-		"}\n");
+		"Path: /auth/basic/walter/secret\r\n"
+		"\r\n"
+		"Headers:\r\n"
+		"--------\r\n"
+		"Host: 192.168.1.17:9090\r\n"
+		"Accept: */*\r\n"
+		"Accept-Encoding: gzip\r\n"
+		"Connection: close\r\n"
+		"User-Agent: Services Kit (Haiku)\r\n"
+		"Referer: http://192.168.1.17:9090/auth/basic/walter/secret\r\n"
+		"Authorization: Basic d2FsdGVyOnNlY3JldA==\r\n");
 	TestListener listener(expectedResponseBody, expectedResponseHeaders);
 
 	BHttpRequest request(testUrl, false, "HTTP", &listener, &context);
@@ -112,7 +119,7 @@ void SendAuthenticatedRequest(
 		dynamic_cast<const BHttpResult &>(request.Result());
 	CPPUNIT_ASSERT_EQUAL(200, result.StatusCode());
 	CPPUNIT_ASSERT_EQUAL(BString("OK"), result.StatusText());
-	CPPUNIT_ASSERT_EQUAL(169, result.Length());
+	CPPUNIT_ASSERT_EQUAL(214, result.Length());
 
 	listener.Verify();
 }
@@ -310,10 +317,9 @@ HttpTest::AuthBasicTest()
 	BUrl testUrl(fBaseUrl, "/auth/basic/walter/secret");
 
 	HttpHeaderMap expectedResponseHeaders;
-	expectedResponseHeaders["Access-Control-Allow-Credentials"] = "true";
-	expectedResponseHeaders["Access-Control-Allow-Origin"] = "*";
-	expectedResponseHeaders["Content-Length"] = "169";
-	expectedResponseHeaders["Content-Type"] = "application/json";
+	expectedResponseHeaders["Content-Encoding"] = "gzip";
+	expectedResponseHeaders["Content-Length"] = "214";
+	expectedResponseHeaders["Content-Type"] = "text/plain";
 	expectedResponseHeaders["Date"] = "Sun, 09 Feb 2020 19:32:42 GMT";
 	expectedResponseHeaders["Server"] = "Test HTTP Server for Haiku";
 	expectedResponseHeaders["Www-Authenticate"] = "Basic realm=\"Fake Realm\"";
