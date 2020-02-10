@@ -257,39 +257,40 @@ HttpTest::UploadTest()
 		"world\r\n"
 		"--<<BOUNDARY-ID>>--\r\n"
 		"\r\n");
-    HttpHeaderMap expectedResponseHeaders;
-    expectedResponseHeaders["Content-Length"] = "1588";
-    expectedResponseHeaders["Content-Type"] = "text/plain";
-    expectedResponseHeaders["Date"] = "Sun, 09 Feb 2020 19:32:42 GMT";
-    expectedResponseHeaders["Server"] = "Test HTTP Server for Haiku";
-    TestListener listener(expectedResponseBody, expectedResponseHeaders);
+	HttpHeaderMap expectedResponseHeaders;
+	expectedResponseHeaders["Content-Length"] = "1588";
+	expectedResponseHeaders["Content-Type"] = "text/plain";
+	expectedResponseHeaders["Date"] = "Sun, 09 Feb 2020 19:32:42 GMT";
+	expectedResponseHeaders["Server"] = "Test HTTP Server for Haiku";
+	TestListener listener(expectedResponseBody, expectedResponseHeaders);
 
-    BUrl testUrl(fBaseUrl, "/post");
+	BUrl testUrl(fBaseUrl, "/post");
 
-    BUrlContext context;
-    BHttpRequest request(testUrl, false, "HTTP", &listener, &context);
+	BUrlContext context;
+	BHttpRequest request(testUrl, false, "HTTP", &listener, &context);
 
-    BHttpForm form;
-    form.AddString("hello", "world");
-    CPPUNIT_ASSERT_EQUAL(
-        B_OK, form.AddFile("_uploadfile", BPath("/system/data/licenses/MIT")));
+	BHttpForm form;
+	form.AddString("hello", "world");
+	CPPUNIT_ASSERT_EQUAL(
+		B_OK,
+		form.AddFile("_uploadfile", BPath("/system/data/licenses/MIT")));
 
-    request.SetPostFields(form);
+	request.SetPostFields(form);
 
-    CPPUNIT_ASSERT(request.Run());
+	CPPUNIT_ASSERT(request.Run());
 
-    while (request.IsRunning())
-      snooze(10);
+	while (request.IsRunning())
+		snooze(10);
 
-    CPPUNIT_ASSERT_EQUAL(B_OK, request.Status());
+	CPPUNIT_ASSERT_EQUAL(B_OK, request.Status());
 
-    const BHttpResult &result =
-        dynamic_cast<const BHttpResult &>(request.Result());
-    CPPUNIT_ASSERT_EQUAL(200, result.StatusCode());
-    CPPUNIT_ASSERT_EQUAL(BString("OK"), result.StatusText());
-    CPPUNIT_ASSERT_EQUAL(1588, result.Length());
+	const BHttpResult &result =
+		dynamic_cast<const BHttpResult &>(request.Result());
+	CPPUNIT_ASSERT_EQUAL(200, result.StatusCode());
+	CPPUNIT_ASSERT_EQUAL(BString("OK"), result.StatusText());
+	CPPUNIT_ASSERT_EQUAL(1588, result.Length());
 
-    listener.Verify();
+	listener.Verify();
 }
 
 
