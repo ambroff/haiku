@@ -88,20 +88,9 @@ private:
 void SendAuthenticatedRequest(
 	BUrlContext &context,
 	BUrl &testUrl,
+	const std::string& expectedResponseBody,
 	const HttpHeaderMap &expectedResponseHeaders)
 {
-	std::string expectedResponseBody(
-		"Path: /auth/basic/walter/secret\r\n"
-		"\r\n"
-		"Headers:\r\n"
-		"--------\r\n"
-		"Host: 192.168.1.17:9090\r\n"
-		"Accept: */*\r\n"
-		"Accept-Encoding: gzip\r\n"
-		"Connection: close\r\n"
-		"User-Agent: Services Kit (Haiku)\r\n"
-		"Referer: http://192.168.1.17:9090/auth/basic/walter/secret\r\n"
-		"Authorization: Basic d2FsdGVyOnNlY3JldA==\r\n");
 	TestListener listener(expectedResponseBody, expectedResponseHeaders);
 
 	BHttpRequest request(testUrl, false, "HTTP", &listener, &context);
@@ -119,7 +108,6 @@ void SendAuthenticatedRequest(
 		dynamic_cast<const BHttpResult &>(request.Result());
 	CPPUNIT_ASSERT_EQUAL(200, result.StatusCode());
 	CPPUNIT_ASSERT_EQUAL(BString("OK"), result.StatusText());
-	CPPUNIT_ASSERT_EQUAL(214, result.Length());
 
 	listener.Verify();
 }
@@ -316,6 +304,19 @@ HttpTest::AuthBasicTest()
 	
 	BUrl testUrl(fBaseUrl, "/auth/basic/walter/secret");
 
+	std::string expectedResponseBody(
+		"Path: /auth/basic/walter/secret\r\n"
+		"\r\n"
+		"Headers:\r\n"
+		"--------\r\n"
+		"Host: 192.168.1.17:9090\r\n"
+		"Accept: */*\r\n"
+		"Accept-Encoding: gzip\r\n"
+		"Connection: close\r\n"
+		"User-Agent: Services Kit (Haiku)\r\n"
+		"Referer: http://192.168.1.17:9090/auth/basic/walter/secret\r\n"
+		"Authorization: Basic d2FsdGVyOnNlY3JldA==\r\n");
+
 	HttpHeaderMap expectedResponseHeaders;
 	expectedResponseHeaders["Content-Encoding"] = "gzip";
 	expectedResponseHeaders["Content-Length"] = "214";
@@ -324,7 +325,8 @@ HttpTest::AuthBasicTest()
 	expectedResponseHeaders["Server"] = "Test HTTP Server for Haiku";
 	expectedResponseHeaders["Www-Authenticate"] = "Basic realm=\"Fake Realm\"";
 
-	SendAuthenticatedRequest(context, testUrl, expectedResponseHeaders);
+	SendAuthenticatedRequest(context, testUrl, expectedResponseBody,
+		expectedResponseHeaders);
 
 	CPPUNIT_ASSERT(!context.GetCookieJar().GetIterator().HasNext());
 		// This page should not set cookies
@@ -344,11 +346,19 @@ HttpTest::AuthDigestTest()
 
 	BUrl testUrl(fBaseUrl, "/auth/digest/walter/secret");
 
+	std::string expectedResponseBody(
+		"Path: /auth/digest/walter/secret\r\n"
+		"\r\n"
+		"Headers:\r\n"
+		"Host: 192.168.1.17:9090\r\n"
+		"Accept: */*\r\n"
+		"Accept-Encoding: gzip\r\n"
+		"Connection: close\r\n"
+		"User-Agent: Services Kit (Haiku)\r\n");
+
 	HttpHeaderMap expectedResponseHeaders;
-	expectedResponseHeaders["Access-Control-Allow-Credentials"] = "true";
-	expectedResponseHeaders["Access-Control-Allow-Origin"] = "*";
 	expectedResponseHeaders["Content-Length"] = "49";
-	expectedResponseHeaders["Content-Type"] = "application/json";
+	expectedResponseHeaders["Content-Type"] = "text/plain";
 	expectedResponseHeaders["Date"] = "Sun, 09 Feb 2020 19:32:42 GMT";
 	expectedResponseHeaders["Server"] = "Test HTTP Server for Haiku";
 	expectedResponseHeaders["Set-Cookie"] = "stale_after=never; Path=/";
@@ -360,7 +370,8 @@ HttpTest::AuthDigestTest()
 		"algorithm=MD5, "
 		"stale=FALSE";
 
-	SendAuthenticatedRequest(context, testUrl, expectedResponseHeaders);
+	SendAuthenticatedRequest(context, testUrl, expectedResponseBody,
+		expectedResponseHeaders);
 
 	std::map<BString, BString> cookies;
 	BNetworkCookieJar::Iterator iter
@@ -398,9 +409,9 @@ HttpTest::_AddCommonTests(BString prefix, CppUnit::TestSuite& suite)
 	name << "AuthBasicTest";
 	suite.addTest(new CppUnit::TestCaller<T>(name.String(), &T::AuthBasicTest));
 
-	// name = prefix;
-	// name << "AuthDigestTest";
-	// suite.addTest(new CppUnit::TestCaller<T>(name.String(), &T::AuthDigestTest));
+	name = prefix;
+	name << "AuthDigestTest";
+	suite.addTest(new CppUnit::TestCaller<T>(name.String(), &T::AuthDigestTest));
 }
 
 
