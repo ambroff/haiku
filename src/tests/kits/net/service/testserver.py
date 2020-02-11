@@ -18,50 +18,13 @@ import base64
 import gzip
 import zlib
 import abc
+import hashlib
 
 
 MULTIPART_FORM_BOUNDARY_RE = re.compile(r'^multipart/form-data; boundary=(----------------------------\d+)$')
 AUTH_PATH_RE = re.compile(
     r'^/auth/(?P<strategy>(basic|digest))/(?P<username>[a-z0-9]+)/(?P<password>[a-z0-9]+)',
     re.IGNORECASE)
-
-
-def extract_desired_status_code_from_path(path, default=200):
-    status_code = default
-    path_parts = os.path.split(path)
-    try:
-        status_code = int(path_parts[-1])
-    except ValueError:
-        pass
-    return status_code
-
-
-def compute_digest_challenge_response_hash(credentials, expected_password):
-    """
-    Compute hash as defined by RFC2069, although this isn't an attempt to be perfect, just
-    enough for basic integration tests in HttpTests to work.
-
-    :param credentials: Map of values parsed from the Authorization header from the client.
-    :param expected_password: The known correct password of the user attempting to authenticate.
-    :return: None if a hash cannot be produced, otherwise the hash as defined by RFC2069.
-    """
-    algorithm = credentials.get('algorithm')
-    if not algorithm in ('MD5', 'SHA-256', 'SHA-512'):
-        return None
-
-    realm = credentials.get('realm')
-    username = credentials.get('username')
-
-
-    return ''
-
-
-def parse_kv_pair_header(header_value):
-    d = {}
-    for kvpair in header_value.split():
-        key, value = kvpair.split('=')
-        d[key.strip()] = value.strip().strip('"')
-    return d
 
 
 class RequestHandler(http.server.BaseHTTPRequestHandler):
@@ -254,16 +217,21 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
         if raw_cookies is not None:
             cookie_data = parse_kv_pair_header(raw_cookies)
 
-        if cookie_data is None or not 'fake' in cookie_data:
-            self.send_response(403, 'Forbidden')
-            self.send_header('Set-Cookie', 'fake=fake_value; Path=/')
-            self.end_headers()
-            self.wfile.write('Missing cookie on challenge')
-            return False, extra_headers
+        # if cookie_data is None or 'fake' not in cookie_data:
+        #     self.send_response(403, 'Forbidden')
+        #     self.send_header('Set-Cookie', 'fake=fake_value; Path=/')
+        #     self.end_headers()
+        #     self.wfile.write('Missing cookie on challenge'.encode('utf-8'))
+        #     return False, extra_headers
 
         expected_response_hash = None
         if credentials:
-            expected_response_hash = compute_digest_challenge_response_hash(credentials, expected_password)
+            expected_response_hash = compute_digest_challenge_response_hash(
+                self.command,
+                self.path,
+                '',
+                credentials,
+                expected_password)
 
         if authorization is None or credentials is None or auth_type != 'Digest' \
                 or expected_response_hash != credentials.get('response'):
@@ -325,6 +293,72 @@ class DeflateResponseBodyBuilder(ResponseBodyBuilder):
 
     def get_bytes(self):
         return zlib.compress(self.raw.get_bytes())
+
+
+def extract_desired_status_code_from_path(path, default=200):
+    status_code = default
+    path_parts = os.path.split(path)
+    try:
+        status_code = int(path_parts[-1])
+    except ValueError:
+        pass
+    return status_code
+
+
+def compute_digest_challenge_response_hash(request_method, request_uri, request_body, credentials, expected_password):
+    """
+    Compute hash as defined by RFC2069, although this isn't an attempt to be perfect, just
+    enough for basic integration tests in HttpTests to work.
+
+    :param credentials: Map of values parsed from the Authorization header from the client.
+    :param expected_password: The known correct password of the user attempting to authenticate.
+    :return: None if a hash cannot be produced, otherwise the hash as defined by RFC2069.
+    """
+    algorithm = credentials.get('algorithm')
+    if algorithm == 'MD5':
+        hashfunc = hashlib.md5
+    elif algorithm == 'SHA-256':
+        hashfunc = hashlib.sha256
+    elif algorithm == 'SHA-512':
+        hashfunc = hashlib.sha512
+    else:
+        return None
+
+    realm = credentials.get('realm')
+    username = credentials.get('username')
+
+    ha1 = hashfunc(':'.join([username, realm, expected_password]).encode('utf-8')).hexdigest()
+
+    qop = credentials.get('qop')
+    if qop is None or qop == 'auth':
+        ha2 = hashfunc(':'.join([request_method, request_uri]).encode('utf-8')).hexdigest()
+    elif qop == 'auth-int':
+        ha2 = hashfunc(':'.join([request_method, request_uri, request_body]).encode('utf-8')).hexdigest()
+    else:
+        ha2 = None
+
+    if ha1 is None or ha2 is None:
+        return None
+
+    if qop is None:
+        return hashfunc(':'.join([ha1, credentials.get('nonce', ''), ha2]).encode('utf-8')).hexdigest()
+    elif qop == 'auth' or qop == 'auth-int':
+        hash_components = [
+            ha1,
+            credentials.get('nonce', ''),
+            credentials.get('nc', ''),
+            credentials.get('cnonce', ''),
+            qop,
+            ha2]
+        return hashfunc(':'.join(hash_components).encode('utf-8')).hexdigest()
+
+
+def parse_kv_pair_header(header_value):
+    d = {}
+    for kvpair in header_value.split():
+        key, value = kvpair.split('=')
+        d[key.strip()] = value.strip().strip('"')
+    return d
 
 
 def main():
