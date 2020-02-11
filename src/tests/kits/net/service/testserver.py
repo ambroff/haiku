@@ -36,8 +36,43 @@ def extract_desired_status_code_from_path(path, default=200):
     return status_code
 
 
-class RequestHandler(http.server.BaseHTTPRequestHandler):
+def compute_digest_challenge_response_hash(credentials, expected_password):
+    """
+    Compute hash as defined by RFC2069, although this isn't an attempt to be perfect, just
+    enough for basic integration tests in HttpTests to work.
 
+    :param credentials: Map of values parsed from the Authorization header from the client.
+    :param expected_password: The known correct password of the user attempting to authenticate.
+    :return: None if a hash cannot be produced, otherwise the hash as defined by RFC2069.
+    """
+    algorithm = credentials.get('algorithm')
+    if not algorithm in ('MD5', 'SHA-256', 'SHA-512'):
+        return None
+
+    realm = credentials.get('realm')
+    username = credentials.get('username')
+
+
+    return ''
+
+
+def parse_kv_pair_header(header_value):
+    d = {}
+    for kvpair in header_value.split():
+        key, value = kvpair.split('=')
+        d[key.strip()] = value.strip().strip('"')
+    return d
+
+
+class RequestHandler(http.server.BaseHTTPRequestHandler):
+    """
+    Any GET or POST request just gets echoed back to the sender. If the path ends with a numeric component like "/404"
+    or "/500", then that value will be set as the status code in the response.
+
+    Note that this isn't meant to replicate expected functionality exactly. Rather than implementing all of these
+    status codes as expected per RFC, such as having an empty response body for 201 response, only the functionality
+    that is required to handle requests from HttpTests is implemented.
+    """
     def do_GET(self, write_response=True):
         """
         Any GET request just gets echoed back to the sender. If the path ends with a numeric component like "/404" or
@@ -161,40 +196,86 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
         if match is None:
             return True, []
 
-        extra_headers = []
-
         strategy = match.group('strategy')
         expected_username = match.group('username')
         expected_password = match.group('password')
 
         if strategy == 'basic':
-            authorization = self.headers.get('Authorization', None)
-            if authorization is None:
-                self.send_response(401, 'Not authorized')
-                self.send_header('Www-Authenticate', 'Basic realm="Fake Realm"')
-                self.end_headers()
-                return False, extra_headers
+            return self._handle_basic_auth(expected_username, expected_password)
+        elif strategy == 'digest':
+            return self._handle_digest_auth(expected_username, expected_password)
+        else:
+            raise NotImplementedError('Unimplemented authorization strategy ' + strategy)
 
+    def _handle_basic_auth(self, expected_username, expected_password):
+        authorization = self.headers.get('Authorization', None)
+        auth_type = None
+        encoded_credentials = None
+        username = None
+        password = None
+
+        if authorization:
             auth_type, encoded_credentials = authorization.split()
-            if auth_type != 'Basic':
-                self.send_response(401, 'Not authorized')
-                self.send_header('Www-Authenticate', 'Basic realm="Fake Realm"')
-                self.end_headers()
-                return False, extra_headers
 
+        if encoded_credentials is not None:
             decoded = base64.decodebytes(encoded_credentials.encode('utf-8'))
             username, password = decoded.decode('utf-8').split(':')
 
-            if username != expected_username or password != expected_password:
-                self.send_response(401, 'Not authorized')
-                self.end_headers()
-                return False, extra_headers
+        if authorization is None or auth_type != 'Basic' or encoded_credentials is None \
+                or username != expected_username or password != expected_password:
+            self.send_response(401, 'Not authorized')
+            self.send_header('Www-Authenticate', 'Basic realm="Fake Realm"')
+            self.end_headers()
+            return False, []
 
-            extra_headers.append(('Www-Authenticate', 'Basic realm="Fake Realm"'))
-        elif strategy == 'digest':
-            pass
-        else:
-            raise NotImplementedError('Unimplemented authorization strategy ' + strategy)
+        return True, [('Www-Authenticate', 'Basic realm="Fake Realm"')]
+
+    def _handle_digest_auth(self, expected_username, expected_password):
+        """
+        Implement enough of the digest auth RFC to make tests pass.
+        """
+        # Note: These values will always be the same because we want the response to be deterministic for testing
+        # purposes.
+        NONCE = 'f3a95f20879dd891a5544bf96a3e5518'
+        OPAQUE = 'f0bb55f1221a51b6d38117c331611799'
+
+        extra_headers = []
+        authorization = self.headers.get('Authorization', None)
+        credentials = None
+        auth_type = None
+        if authorization is not None:
+            auth_type, fields = authorization.split(maxsplit=1)
+            if auth_type == 'Digest':
+                credentials = parse_kv_pair_header(fields)
+
+        raw_cookies = self.headers.get('Cookie', None)
+        cookie_data = None
+
+        if raw_cookies is not None:
+            cookie_data = parse_kv_pair_header(raw_cookies)
+
+        if cookie_data is None or not 'fake' in cookie_data:
+            self.send_response(403, 'Forbidden')
+            self.send_header('Set-Cookie', 'fake=fake_value; Path=/')
+            self.end_headers()
+            self.wfile.write('Missing cookie on challenge')
+            return False, extra_headers
+
+        expected_response_hash = None
+        if credentials:
+            expected_response_hash = compute_digest_challenge_response_hash(credentials, expected_password)
+
+        if authorization is None or credentials is None or auth_type != 'Digest' \
+                or expected_response_hash != credentials.get('response'):
+            self.send_response(401, 'Not authorized')
+            self.send_header(
+                'Www-Authenticate',
+                'Digest realm="user@shredder", nonce="{}", qop="auth", opaque={},'
+                ' algorithm=MD5, stale=FALSE'.format(NONCE, OPAQUE))
+            self.send_header('Set-Cookie', 'stale_after=never; Path=/')
+            self.send_header('Set-Cookie', 'fake=fake_value; Path=/')
+            self.end_headers()
+            return False, extra_headers
 
         return True, extra_headers
 
