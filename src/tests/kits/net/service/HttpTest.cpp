@@ -20,6 +20,8 @@
 
 #include <cppunit/TestCaller.h>
 
+#include "TestServer.h"
+
 
 namespace {
 
@@ -130,6 +132,9 @@ HttpTest::~HttpTest()
 void
 HttpTest::GetTest()
 {
+	TestServer test_server;
+	CPPUNIT_ASSERT_EQUAL(B_OK, test_server.Start());
+
 	BUrl testUrl(fBaseUrl, "/");
 	BUrlContext* context = new BUrlContext();
 	context->AcquireReference();
@@ -216,6 +221,9 @@ HttpTest::ProxyTest()
 void
 HttpTest::UploadTest()
 {
+	TestServer test_server;
+	CPPUNIT_ASSERT_EQUAL(B_OK, test_server.Start());
+
 	// The test server will echo the POST body back to us in the HTTP response,
 	// so here we load it into memory so that we can compare to make sure that
 	// the server received it.
@@ -300,6 +308,9 @@ HttpTest::UploadTest()
 void
 HttpTest::AuthBasicTest()
 {
+	TestServer test_server;
+	CPPUNIT_ASSERT_EQUAL(B_OK, test_server.Start());
+
 	BUrlContext context;
 	
 	BUrl testUrl(fBaseUrl, "/auth/basic/walter/secret");
@@ -342,6 +353,9 @@ HttpTest::AuthBasicTestNotAuthorized()
 void
 HttpTest::AuthDigestTest()
 {
+	TestServer test_server;
+	CPPUNIT_ASSERT_EQUAL(B_OK, test_server.Start());
+
 	BUrlContext context;
 
 	BUrl testUrl(fBaseUrl, "/auth/digest/walter/secret");
