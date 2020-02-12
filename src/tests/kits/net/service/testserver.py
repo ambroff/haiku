@@ -3,8 +3,9 @@ HTTP(S) server used for integration testing of ServicesKit.
 
 This service receives HTTP requests and just echos them back in the response.
 
-This is intentionally not using any fancy frameworks or libraries so as to not require any dependencies, and also to
-allow for adding endpoints to replicate behavior of other servers in the future.
+This is intentionally not using any fancy frameworks or libraries so as to not
+require any dependencies, and also to allow for adding endpoints to replicate
+behavior of other servers in the future.
 """
 
 import optparse
@@ -21,29 +22,37 @@ import abc
 import hashlib
 
 
-MULTIPART_FORM_BOUNDARY_RE = re.compile(r'^multipart/form-data; boundary=(----------------------------\d+)$')
+MULTIPART_FORM_BOUNDARY_RE = re.compile(
+    r'^multipart/form-data; boundary=(----------------------------\d+)$')
 AUTH_PATH_RE = re.compile(
-    r'^/auth/(?P<strategy>(basic|digest))/(?P<username>[a-z0-9]+)/(?P<password>[a-z0-9]+)',
+    r'^/auth/(?P<strategy>(basic|digest))'
+    '/(?P<username>[a-z0-9]+)/(?P<password>[a-z0-9]+)',
     re.IGNORECASE)
 
 
 class RequestHandler(http.server.BaseHTTPRequestHandler):
     """
-    Any GET or POST request just gets echoed back to the sender. If the path ends with a numeric component like "/404"
-    or "/500", then that value will be set as the status code in the response.
+    Any GET or POST request just gets echoed back to the sender. If the path
+    ends with a numeric component like "/404" or "/500", then that value will
+    be set as the status code in the response.
 
-    Note that this isn't meant to replicate expected functionality exactly. Rather than implementing all of these
-    status codes as expected per RFC, such as having an empty response body for 201 response, only the functionality
-    that is required to handle requests from HttpTests is implemented.
+    Note that this isn't meant to replicate expected functionality exactly.
+    Rather than implementing all of these status codes as expected per RFC,
+    such as having an empty response body for 201 response, only the
+    functionality that is required to handle requests from HttpTests is
+    implemented.
     """
     def do_GET(self, write_response=True):
         """
-        Any GET request just gets echoed back to the sender. If the path ends with a numeric component like "/404" or
-        "/500", then that value will be set as the status code in the response.
+        Any GET request just gets echoed back to the sender. If the path ends
+        with a numeric component like "/404" or "/500", then that value will
+        be set as the status code in the response.
 
-        Note that this isn't meant to replicate expected functionality exactly. Rather than implementing all of these
-        status codes as expected per RFC, such as having an empty response body for 201 response, only the functionality
-        that is required to handle requests from HttpTests is implemented.
+        Note that this isn't meant to replicate expected functionality
+        exactly. Rather than implementing all of these status codes as
+        expected per RFC, such as having an empty response body for 201
+        response, only the functionality that is required to handle requests
+        from HttpTests is implemented.
         """
         authorized, extra_headers = self._authorize()
         if not authorized:
@@ -51,7 +60,8 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
 
         encoding, response_body = self._build_response_body()
 
-        self.send_response(extract_desired_status_code_from_path(self.path, 200))
+        self.send_response(
+            extract_desired_status_code_from_path(self.path, 200))
         self.send_header('Content-Type', 'text/plain')
         self.send_header('Content-Length', str(len(response_body)))
         if encoding:
@@ -72,7 +82,8 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
             return
 
         encoding, response_body = self._build_response_body()
-        self.send_response(extract_desired_status_code_from_path(self.path, 200))
+        self.send_response(
+            extract_desired_status_code_from_path(self.path, 200))
         self.send_header('Content-Type', 'text/plain')
         self.send_header('Content-Length', str(len(response_body)))
         if encoding:
@@ -99,14 +110,20 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
         self.send_header('Date', 'Sun, 09 Feb 2020 19:32:42 GMT')
 
     def _build_response_body(self):
-        # The post-body may be multi-part/form-data, in which case the client will have generated some
-        # random identifier to identify the boundary. If that's the case, we'll replace it here in order to allow
-        # the test client to validate the response data without needing to predict the boundary identifier. This makes
-        # the response body deterministic even though the boundary will change with every request, and lets the tests
-        # in HttpTests hard-code the entire expected response body for validation.
+        # The post-body may be multi-part/form-data, in which case the client
+        # will have generated some random identifier to identify the boundary.
+        # If that's the case, we'll replace it here in order to allow the test
+        # client to validate the response data without needing to predict the
+        # boundary identifier. This makes the response body deterministic even
+        # though the boundary will change with every request, and lets the
+        # tests in HttpTests hard-code the entire expected response body for
+        # validation.
         boundary_id_value = None
 
-        supported_encodings = [e.strip() for e in self.headers.get('Accept-Encoding', '').split(',') if e.strip()]
+        supported_encodings = [
+            e.strip()
+            for e in self.headers.get('Accept-Encoding', '').split(',')
+            if e.strip()]
         if 'gzip' in supported_encodings:
             encoding = 'gzip'
             output_stream = GzipResponseBodyBuilder()
@@ -117,17 +134,22 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
             encoding = None
             output_stream = RawResponseBodyBuilder()
 
-        output_stream.write('Path: {}\r\n\r\n'.format(self.path).encode('utf-8'))
+        output_stream.write(
+            'Path: {}\r\n\r\n'.format(self.path).encode('utf-8'))
         output_stream.write(b'Headers:\r\n')
         output_stream.write(b'--------\r\n')
         for header in self.headers:
             for header_value in self.headers.get_all(header):
                 if header == 'Content-Type':
-                    match = MULTIPART_FORM_BOUNDARY_RE.match(self.headers.get('Content-Type', 'text/plain'))
+                    match = MULTIPART_FORM_BOUNDARY_RE.match(
+                        self.headers.get('Content-Type', 'text/plain'))
                     if match is not None:
                         boundary_id_value = match.group(1)
-                        header_value = header_value.replace(boundary_id_value, '<<BOUNDARY-ID>>')
-                output_stream.write('{}: {}\r\n'.format(header, header_value).encode('utf-8'))
+                        header_value = header_value.replace(
+                            boundary_id_value,
+                            '<<BOUNDARY-ID>>')
+                output_stream.write(
+                    '{}: {}\r\n'.format(header, header_value).encode('utf-8'))
 
         content_length = int(self.headers.get('Content-Length', 0))
         if content_length > 0:
@@ -137,7 +159,8 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
 
             body_bytes = self.rfile.read(content_length).decode('utf-8')
             if boundary_id_value:
-                body_bytes = body_bytes.replace(boundary_id_value, '<<BOUNDARY-ID>>')
+                body_bytes = body_bytes.replace(
+                    boundary_id_value, '<<BOUNDARY-ID>>')
 
             output_stream.write(body_bytes.encode('utf-8'))
             output_stream.write(b'\r\n')
@@ -147,14 +170,17 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
     def _not_supported(self):
         self.send_response(405, '{} not supported'.format(self.command))
         self.end_headers()
-        self.wfile.write('{} not supported\r\n'.format(self.command).encode('utf-8'))
+        self.wfile.write(
+            '{} not supported\r\n'.format(self.command).encode('utf-8'))
 
     def _authorize(self):
         """
-        Authorizes the request. If True is returned that means that the request was not authorized and the 4xx response
-        has been send to the client.
+        Authorizes the request. If True is returned that means that the
+        request was not authorized and the 4xx response has been send to the
+        client.
         """
-        # We only authorize paths like /auth/<strategy>/<expected-username>/<expected-password>
+        # We only authorize paths like
+        # /auth/<strategy>/<expected-username>/<expected-password>
         match = AUTH_PATH_RE.match(self.path)
         if match is None:
             return True, []
@@ -164,11 +190,16 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
         expected_password = match.group('password')
 
         if strategy == 'basic':
-            return self._handle_basic_auth(expected_username, expected_password)
+            return self._handle_basic_auth(
+                expected_username,
+                expected_password)
         elif strategy == 'digest':
-            return self._handle_digest_auth(expected_username, expected_password)
+            return self._handle_digest_auth(
+                expected_username,
+                expected_password)
         else:
-            raise NotImplementedError('Unimplemented authorization strategy ' + strategy)
+            raise NotImplementedError(
+                'Unimplemented authorization strategy ' + strategy)
 
     def _handle_basic_auth(self, expected_username, expected_password):
         authorization = self.headers.get('Authorization', None)
@@ -184,8 +215,10 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
             decoded = base64.decodebytes(encoded_credentials.encode('utf-8'))
             username, password = decoded.decode('utf-8').split(':')
 
-        if authorization is None or auth_type != 'Basic' or encoded_credentials is None \
-                or username != expected_username or password != expected_password:
+        if authorization is None or auth_type != 'Basic' \
+                or encoded_credentials is None \
+                or username != expected_username \
+                or password != expected_password:
             self.send_response(401, 'Not authorized')
             self.send_header('Www-Authenticate', 'Basic realm="Fake Realm"')
             self.end_headers()
@@ -197,8 +230,8 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
         """
         Implement enough of the digest auth RFC to make tests pass.
         """
-        # Note: These values will always be the same because we want the response to be deterministic for testing
-        # purposes.
+        # Note: These values will always be the same because we want the
+        # response to be deterministic for testing purposes.
         NONCE = 'f3a95f20879dd891a5544bf96a3e5518'
         OPAQUE = 'f0bb55f1221a51b6d38117c331611799'
 
@@ -233,13 +266,18 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                 credentials,
                 expected_password)
 
-        if authorization is None or credentials is None or auth_type != 'Digest' \
+        if authorization is None or credentials is None \
+                or auth_type != 'Digest' \
                 or expected_response_hash != credentials.get('response'):
             self.send_response(401, 'Not authorized')
             self.send_header(
                 'Www-Authenticate',
-                'Digest realm="user@shredder", nonce="{}", qop="auth", opaque={},'
-                ' algorithm=MD5, stale=FALSE'.format(NONCE, OPAQUE))
+                'Digest realm="user@shredder",'
+                ' nonce="{}",'
+                ' qop="auth",'
+                ' opaque={},'
+                ' algorithm=MD5,'
+                ' stale=FALSE'.format(NONCE, OPAQUE))
             self.send_header('Set-Cookie', 'stale_after=never; Path=/')
             self.send_header('Set-Cookie', 'fake=fake_value; Path=/')
             self.end_headers()
@@ -274,7 +312,10 @@ class RawResponseBodyBuilder(ResponseBodyBuilder):
 class GzipResponseBodyBuilder(ResponseBodyBuilder):
     def __init__(self):
         self.buf = io.BytesIO()
-        self.compressor = gzip.GzipFile(mode='wb', compresslevel=4, fileobj=self.buf)
+        self.compressor = gzip.GzipFile(
+            mode='wb',
+            compresslevel=4,
+            fileobj=self.buf)
 
     def write(self, bytes):
         self.compressor.write(bytes)
@@ -305,14 +346,22 @@ def extract_desired_status_code_from_path(path, default=200):
     return status_code
 
 
-def compute_digest_challenge_response_hash(request_method, request_uri, request_body, credentials, expected_password):
+def compute_digest_challenge_response_hash(
+        request_method,
+        request_uri,
+        request_body,
+        credentials,
+        expected_password):
     """
-    Compute hash as defined by RFC2069, although this isn't an attempt to be perfect, just
-    enough for basic integration tests in HttpTests to work.
+    Compute hash as defined by RFC2069, although this isn't an attempt to be
+    perfect, just enough for basic integration tests in HttpTests to work.
 
-    :param credentials: Map of values parsed from the Authorization header from the client.
-    :param expected_password: The known correct password of the user attempting to authenticate.
-    :return: None if a hash cannot be produced, otherwise the hash as defined by RFC2069.
+    :param credentials: Map of values parsed from the Authorization header
+                        from the client.
+    :param expected_password: The known correct password of the user
+                              attempting to authenticate.
+    :return: None if a hash cannot be produced, otherwise the hash as defined
+             by RFC2069.
     """
     algorithm = credentials.get('algorithm')
     if algorithm == 'MD5':
@@ -327,13 +376,21 @@ def compute_digest_challenge_response_hash(request_method, request_uri, request_
     realm = credentials.get('realm')
     username = credentials.get('username')
 
-    ha1 = hashfunc(':'.join([username, realm, expected_password]).encode('utf-8')).hexdigest()
+    ha1 = hashfunc(':'.join([
+        username,
+        realm,
+        expected_password]).encode('utf-8')).hexdigest()
 
     qop = credentials.get('qop')
     if qop is None or qop == 'auth':
-        ha2 = hashfunc(':'.join([request_method, request_uri]).encode('utf-8')).hexdigest()
+        ha2 = hashfunc(':'.join([
+            request_method,
+            request_uri]).encode('utf-8')).hexdigest()
     elif qop == 'auth-int':
-        ha2 = hashfunc(':'.join([request_method, request_uri, request_body]).encode('utf-8')).hexdigest()
+        ha2 = hashfunc(':'.join([
+            request_method,
+            request_uri,
+            request_body]).encode('utf-8')).hexdigest()
     else:
         ha2 = None
 
@@ -341,7 +398,10 @@ def compute_digest_challenge_response_hash(request_method, request_uri, request_
         return None
 
     if qop is None:
-        return hashfunc(':'.join([ha1, credentials.get('nonce', ''), ha2]).encode('utf-8')).hexdigest()
+        return hashfunc(':'.join([
+            ha1,
+            credentials.get('nonce', ''),
+            ha2]).encode('utf-8')).hexdigest()
     elif qop == 'auth' or qop == 'auth-int':
         hash_components = [
             ha1,
@@ -367,30 +427,51 @@ def main():
     bind_addr = (options.bind_addr, options.port)
 
     if options.server_socket_fd:
-        server = http.server.HTTPServer(bind_addr, RequestHandler, bind_and_activate=False)
-        server.socket = socket.fromfd(options.server_socket_fd, socket.AF_INET, socket.SOCK_STREAM)
+        server = http.server.HTTPServer(
+            bind_addr,
+            RequestHandler,
+            bind_and_activate=False)
+        server.socket = socket.fromfd(
+            options.server_socket_fd,
+            socket.AF_INET,
+            socket.SOCK_STREAM)
     else:
         # A socket hasn't been open for us already, so we'll just use
         # a random port here.
         server = http.server.HTTPServer(bind_addr, RequestHandler)
 
     try:
-        print('Test server listening on port', server.server_port, file=sys.stderr)
+        print(
+            'Test server listening on port',
+            server.server_port,
+            file=sys.stderr)
         server.serve_forever(0.01)
     except KeyboardInterrupt:
         server.server_close()
 
 
 def parse_args(argv):
-    parser = optparse.OptionParser(usage='Usage: %prog [OPTIONS]', description=__doc__)
-    parser.add_option('--bind-addr', default='127.0.0.1', dest='bind_addr', help='By default only bind to loopback')
+    parser = optparse.OptionParser(
+        usage='Usage: %prog [OPTIONS]',
+        description=__doc__)
+    parser.add_option(
+        '--bind-addr',
+        default='127.0.0.1',
+        dest='bind_addr',
+        help='By default only bind to loopback')
     parser.add_option(
         '--use-tls',
         dest='use_tls',
         default=False,
         action='store_true',
-        help='If set, a self-signed TLS certificate, key and CA will be generated for testing purposes.')
-    parser.add_option('--port', dest='port', default=0, type='int', help='If not specified a random port will be used.')
+        help='If set, a self-signed TLS certificate, key and CA will be'
+        ' generated for testing purposes.')
+    parser.add_option(
+        '--port',
+        dest='port',
+        default=0,
+        type='int',
+        help='If not specified a random port will be used.')
     parser.add_option(
         "--fd",
         dest='server_socket_fd',
