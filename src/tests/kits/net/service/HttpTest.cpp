@@ -117,7 +117,7 @@ void SendAuthenticatedRequest(
 
 HttpTest::HttpTest()
 	:
-	fBaseUrl("http://192.168.1.17:9090/")
+	fBaseUrl("http://127.0.0.1:9090/")
 {
 }
 
@@ -139,14 +139,14 @@ HttpTest::GetTest()
 		"\r\n"
 		"Headers:\r\n"
 		"--------\r\n"
-		"Host: 192.168.1.17:9090\r\n"
+		"Host: 127.0.0.1:9090\r\n"
 		"Accept: */*\r\n"
 		"Accept-Encoding: gzip\r\n"
 		"Connection: close\r\n"
 		"User-Agent: Services Kit (Haiku)\r\n");
 	HttpHeaderMap expectedResponseHeaders;
 	expectedResponseHeaders["Content-Encoding"] = "gzip";
-	expectedResponseHeaders["Content-Length"] = "147";
+	expectedResponseHeaders["Content-Length"] = "143";
 	expectedResponseHeaders["Content-Type"] = "text/plain";
 	expectedResponseHeaders["Date"] = "Sun, 09 Feb 2020 19:32:42 GMT";
 	expectedResponseHeaders["Server"] = "Test HTTP Server for Haiku";
@@ -164,7 +164,7 @@ HttpTest::GetTest()
 	CPPUNIT_ASSERT_EQUAL(200, result.StatusCode());
 	CPPUNIT_ASSERT_EQUAL(BString("OK"), result.StatusText());
 
-	CPPUNIT_ASSERT_EQUAL(147, result.Length());
+	CPPUNIT_ASSERT_EQUAL(143, result.Length());
 
 	listener.Verify();
 
@@ -236,7 +236,7 @@ HttpTest::UploadTest()
 		"\r\n"
 		"Headers:\r\n"
 		"--------\r\n"
-		"Host: 192.168.1.17:9090\r\n"
+		"Host: 127.0.0.1:9090\r\n"
 		"Accept: */*\r\n"
 		"Accept-Encoding: gzip\r\n"
 		"Connection: close\r\n"
@@ -261,7 +261,7 @@ HttpTest::UploadTest()
 		"\r\n");
 	HttpHeaderMap expectedResponseHeaders;
 	expectedResponseHeaders["Content-Encoding"] = "gzip";
-	expectedResponseHeaders["Content-Length"] = "925";
+	expectedResponseHeaders["Content-Length"] = "920";
 	expectedResponseHeaders["Content-Type"] = "text/plain";
 	expectedResponseHeaders["Date"] = "Sun, 09 Feb 2020 19:32:42 GMT";
 	expectedResponseHeaders["Server"] = "Test HTTP Server for Haiku";
@@ -291,7 +291,7 @@ HttpTest::UploadTest()
 		dynamic_cast<const BHttpResult &>(request.Result());
 	CPPUNIT_ASSERT_EQUAL(200, result.StatusCode());
 	CPPUNIT_ASSERT_EQUAL(BString("OK"), result.StatusText());
-	CPPUNIT_ASSERT_EQUAL(925, result.Length());
+	CPPUNIT_ASSERT_EQUAL(920, result.Length());
 
 	listener.Verify();
 }
@@ -309,17 +309,17 @@ HttpTest::AuthBasicTest()
 		"\r\n"
 		"Headers:\r\n"
 		"--------\r\n"
-		"Host: 192.168.1.17:9090\r\n"
+		"Host: 127.0.0.1:9090\r\n"
 		"Accept: */*\r\n"
 		"Accept-Encoding: gzip\r\n"
 		"Connection: close\r\n"
 		"User-Agent: Services Kit (Haiku)\r\n"
-		"Referer: http://192.168.1.17:9090/auth/basic/walter/secret\r\n"
+		"Referer: http://127.0.0.1:9090/auth/basic/walter/secret\r\n"
 		"Authorization: Basic d2FsdGVyOnNlY3JldA==\r\n");
 
 	HttpHeaderMap expectedResponseHeaders;
 	expectedResponseHeaders["Content-Encoding"] = "gzip";
-	expectedResponseHeaders["Content-Length"] = "214";
+	expectedResponseHeaders["Content-Length"] = "210";
 	expectedResponseHeaders["Content-Type"] = "text/plain";
 	expectedResponseHeaders["Date"] = "Sun, 09 Feb 2020 19:32:42 GMT";
 	expectedResponseHeaders["Server"] = "Test HTTP Server for Haiku";
@@ -351,12 +351,12 @@ HttpTest::AuthDigestTest()
 		"\r\n"
 		"Headers:\r\n"
 		"--------\r\n"
-		"Host: 192.168.1.17:9090\r\n"
+		"Host: 127.0.0.1:9090\r\n"
 		"Accept: */*\r\n"
 		"Accept-Encoding: gzip\r\n"
 		"Connection: close\r\n"
 		"User-Agent: Services Kit (Haiku)\r\n"
-		"Referer: http://192.168.1.17:9090/auth/digest/walter/secret\r\n"
+		"Referer: http://127.0.0.1:9090/auth/digest/walter/secret\r\n"
 		"Authorization: Digest username=\"walter\","
 		" realm=\"user@shredder\","
 		" nonce=\"f3a95f20879dd891a5544bf96a3e5518\","
@@ -371,7 +371,7 @@ HttpTest::AuthDigestTest()
 
 	HttpHeaderMap expectedResponseHeaders;
 	expectedResponseHeaders["Content-Encoding"] = "gzip";
-	expectedResponseHeaders["Content-Length"] = "402";
+	expectedResponseHeaders["Content-Length"] = "399";
 	expectedResponseHeaders["Content-Type"] = "text/plain";
 	expectedResponseHeaders["Date"] = "Sun, 09 Feb 2020 19:32:42 GMT";
 	expectedResponseHeaders["Server"] = "Test HTTP Server for Haiku";
