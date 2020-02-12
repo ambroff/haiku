@@ -215,7 +215,7 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
         cookie_data = None
 
         if raw_cookies is not None:
-            cookie_data = parse_kv_pair_header(raw_cookies)
+            cookie_data = parse_kv_pair_header(raw_cookies, ';')
 
         # if cookie_data is None or 'fake' not in cookie_data:
         #     self.send_response(403, 'Forbidden')
@@ -353,10 +353,10 @@ def compute_digest_challenge_response_hash(request_method, request_uri, request_
         return hashfunc(':'.join(hash_components).encode('utf-8')).hexdigest()
 
 
-def parse_kv_pair_header(header_value):
+def parse_kv_pair_header(header_value, sep=','):
     d = {}
-    for kvpair in header_value.split():
-        key, value = kvpair.split('=')
+    for kvpair in header_value.split(sep):
+        key, value = kvpair.strip().split('=')
         d[key.strip()] = value.strip().strip('"')
     return d
 
