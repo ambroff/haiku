@@ -34,6 +34,7 @@ status_t TestServer::Start()
 
 	if (child > 0) {
 		fChildPid = child;
+		sleep(1);
 		return B_OK;
 	}
 
@@ -43,5 +44,21 @@ status_t TestServer::Start()
 	std::string testSrcDir(dirname(testFileSource));
 	std::string testServerScript = testSrcDir + "/" + "testserver.py";
 
-	std::string testGeneratedDir = BTestShell::GlobalTestDir();
+	// TODO: Use this for generated TLS cert
+	// std::string testGeneratedDir = BTestShell::GlobalTestDir();
+
+	execl(
+		"/bin/python3",
+		"/bin/python3",
+		"../src/tests/kits/net/service/testserver.py",
+		"--port=9090",
+		NULL);
+
+	// If we reach this point we failed to load the Python image.
+	fprintf(
+		stderr,
+		"Unable to spawn %s: %s\n",
+		testServerScript.c_str(),
+		strerror(errno));
+	exit(1);
 }
