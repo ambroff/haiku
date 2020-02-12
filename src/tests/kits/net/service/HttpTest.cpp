@@ -350,23 +350,37 @@ HttpTest::AuthDigestTest()
 		"Path: /auth/digest/walter/secret\r\n"
 		"\r\n"
 		"Headers:\r\n"
+		"--------\r\n"
 		"Host: 192.168.1.17:9090\r\n"
 		"Accept: */*\r\n"
 		"Accept-Encoding: gzip\r\n"
 		"Connection: close\r\n"
-		"User-Agent: Services Kit (Haiku)\r\n");
+		"User-Agent: Services Kit (Haiku)\r\n"
+		"Referer: http://192.168.1.17:9090/auth/digest/walter/secret\r\n"
+		"Authorization: Digest username=\"walter\","
+		" realm=\"user@shredder\","
+		" nonce=\"f3a95f20879dd891a5544bf96a3e5518\","
+		" algorithm=MD5,"
+		" opaque=\"f0bb55f1221a51b6d38117c331611799\","
+		" uri=\"/auth/digest/walter/secret\","
+		" qop=auth,"
+		" cnonce=\"60a3d95d286a732374f0f35fb6d21e79\","
+		" nc=00000001,"
+		" response=\"f4264de468aa1a91d81ac40fa73445f3\"\r\n"
+		"Cookie: stale_after=never; fake=fake_value\r\n");
 
 	HttpHeaderMap expectedResponseHeaders;
-	expectedResponseHeaders["Content-Length"] = "49";
+	expectedResponseHeaders["Content-Encoding"] = "gzip";
+	expectedResponseHeaders["Content-Length"] = "402";
 	expectedResponseHeaders["Content-Type"] = "text/plain";
 	expectedResponseHeaders["Date"] = "Sun, 09 Feb 2020 19:32:42 GMT";
 	expectedResponseHeaders["Server"] = "Test HTTP Server for Haiku";
-	expectedResponseHeaders["Set-Cookie"] = "stale_after=never; Path=/";
+	expectedResponseHeaders["Set-Cookie"] = "fake=fake_value; Path=/";
 	expectedResponseHeaders["Www-Authenticate"]
 		= "Digest realm=\"user@shredder\", "
-		"nonce=\"54f03096e39fc96b80fc41f6dac4e489\", "
+		"nonce=\"f3a95f20879dd891a5544bf96a3e5518\", "
 		"qop=\"auth\", "
-		"opaque=\"ef3dfdd63cd2bba0af0f3a2c7806f40b\", "
+		"opaque=f0bb55f1221a51b6d38117c331611799, "
 		"algorithm=MD5, "
 		"stale=FALSE";
 
