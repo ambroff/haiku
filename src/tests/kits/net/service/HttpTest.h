@@ -37,9 +37,6 @@ public:
 private:
 	template<class T> static	void	_AddCommonTests(BString prefix,
 											CppUnit::TestSuite& suite);
-
-protected:
-								BUrl	fBaseUrl;
 };
 
 

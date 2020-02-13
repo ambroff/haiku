@@ -118,8 +118,6 @@ void SendAuthenticatedRequest(
 
 
 HttpTest::HttpTest()
-	:
-	fBaseUrl("http://127.0.0.1:9090/")
 {
 }
 
@@ -132,10 +130,10 @@ HttpTest::~HttpTest()
 void
 HttpTest::GetTest()
 {
-	TestServer test_server;
-	CPPUNIT_ASSERT_EQUAL(B_OK, test_server.Start());
+	TestServer testServer;
+	CPPUNIT_ASSERT_EQUAL(B_OK, testServer.Start());
 
-	BUrl testUrl(fBaseUrl, "/");
+	BUrl testUrl(testServer.BaseUrl(), "/");
 	BUrlContext* context = new BUrlContext();
 	context->AcquireReference();
 
@@ -189,7 +187,7 @@ HttpTest::GetTestConnectionRefused()
 void
 HttpTest::ProxyTest()
 {
-	BUrl testUrl(fBaseUrl, "/user-agent");
+	BUrl testUrl; //(fBaseUrl, "/user-agent");
 
 	BUrlContext* c = new BUrlContext();
 	c->AcquireReference();
@@ -221,8 +219,8 @@ HttpTest::ProxyTest()
 void
 HttpTest::UploadTest()
 {
-	TestServer test_server;
-	CPPUNIT_ASSERT_EQUAL(B_OK, test_server.Start());
+	TestServer testServer;
+	CPPUNIT_ASSERT_EQUAL(B_OK, testServer.Start());
 
 	// The test server will echo the POST body back to us in the HTTP response,
 	// so here we load it into memory so that we can compare to make sure that
@@ -275,7 +273,7 @@ HttpTest::UploadTest()
 	expectedResponseHeaders["Server"] = "Test HTTP Server for Haiku";
 	TestListener listener(expectedResponseBody, expectedResponseHeaders);
 
-	BUrl testUrl(fBaseUrl, "/post");
+	BUrl testUrl(testServer.BaseUrl(), "/post");
 
 	BUrlContext context;
 	BHttpRequest request(testUrl, false, "HTTP", &listener, &context);
@@ -308,12 +306,12 @@ HttpTest::UploadTest()
 void
 HttpTest::AuthBasicTest()
 {
-	TestServer test_server;
-	CPPUNIT_ASSERT_EQUAL(B_OK, test_server.Start());
+	TestServer testServer;
+	CPPUNIT_ASSERT_EQUAL(B_OK, testServer.Start());
 
 	BUrlContext context;
 	
-	BUrl testUrl(fBaseUrl, "/auth/basic/walter/secret");
+	BUrl testUrl(testServer.BaseUrl(), "/auth/basic/walter/secret");
 
 	std::string expectedResponseBody(
 		"Path: /auth/basic/walter/secret\r\n"
@@ -353,12 +351,12 @@ HttpTest::AuthBasicTestNotAuthorized()
 void
 HttpTest::AuthDigestTest()
 {
-	TestServer test_server;
-	CPPUNIT_ASSERT_EQUAL(B_OK, test_server.Start());
+	TestServer testServer;
+	CPPUNIT_ASSERT_EQUAL(B_OK, testServer.Start());
 
 	BUrlContext context;
 
-	BUrl testUrl(fBaseUrl, "/auth/digest/walter/secret");
+	BUrl testUrl(testServer.BaseUrl(), "/auth/digest/walter/secret");
 
 	std::string expectedResponseBody(
 		"Path: /auth/digest/walter/secret\r\n"
@@ -477,5 +475,5 @@ HttpTest::AddTests(BTestSuite& parent)
 HttpsTest::HttpsTest()
 	: HttpTest()
 {
-	fBaseUrl.SetProtocol("https");
+	//fBaseUrl.SetProtocol("https");
 }
