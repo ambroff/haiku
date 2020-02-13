@@ -185,7 +185,10 @@ HttpTest::GetTest()
 void
 HttpTest::ProxyTest()
 {
-	BUrl testUrl; //(fBaseUrl, "/user-agent");
+	TestServer testServer;
+	CPPUNIT_ASSERT_EQUAL(B_OK, testServer.Start());
+
+	BUrl testUrl(testServer.BaseUrl(), "/user-agent");
 
 	BUrlContext* c = new BUrlContext();
 	c->AcquireReference();
