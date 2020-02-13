@@ -18,6 +18,7 @@ import optparse
 import os
 import re
 import socket
+import subprocess
 import sys
 import zlib
 
@@ -340,6 +341,24 @@ def extract_desired_status_code_from_path(path, default=200):
     return status_code
 
 
+def generate_self_signed_tls_cert(common_name):
+    """
+    Returns (certfile, keyfile)
+    """
+    subprocess.check_call([
+        'openssl',
+        'req',
+        '-x509',
+        '-nodes',
+        '-subj', '/CN=127.0.0.1:PORT',
+        '-newkey', 'rsa:4096',
+        '-keyout', '/tmp/key.pem',
+        '-out', '/tmp/cert.pem',
+        '-days', '1'
+    ])
+    return ('/tmp/cert.pem', '/tmp/key.pem')
+
+
 def compute_digest_challenge_response_hash(
         request_method,
         request_uri,
@@ -418,31 +437,43 @@ def parse_kv_pair_header(header_value, sep=','):
 def main():
     options = parse_args(sys.argv)
 
-    bind_addr = (options.bind_addr, options.port)
-
-    if options.server_socket_fd:
-        server = http.server.HTTPServer(
-            bind_addr,
-            RequestHandler,
-            bind_and_activate=False)
-        server.socket = socket.fromfd(
-            options.server_socket_fd,
-            socket.AF_INET,
-            socket.SOCK_STREAM)
-        server.server_port = server.socket.getsockname()[1]
-    else:
-        # A socket hasn't been open for us already, so we'll just use
-        # a random port here.
-        server = http.server.HTTPServer(bind_addr, RequestHandler)
+    certfile = None
+    keyfile = None
+    if options.use_tls:
+        certfile, keyfile = generate_self_signed_tls_cert(
+            options.bind_addr + ':' + str(options.port))
 
     try:
-        print(
-            'Test server listening on port',
-            server.server_port,
-            file=sys.stderr)
-        server.serve_forever(0.01)
-    except KeyboardInterrupt:
-        server.server_close()
+        bind_addr = (options.bind_addr, options.port)
+
+        if options.server_socket_fd:
+            server = http.server.HTTPServer(
+                bind_addr,
+                RequestHandler,
+                bind_and_activate=False)
+            server.socket = socket.fromfd(
+                options.server_socket_fd,
+                socket.AF_INET,
+                socket.SOCK_STREAM)
+            server.server_port = server.socket.getsockname()[1]
+        else:
+            # A socket hasn't been open for us already, so we'll just use
+            # a random port here.
+            server = http.server.HTTPServer(bind_addr, RequestHandler)
+
+        try:
+            print(
+                'Test server listening on port',
+                server.server_port,
+                file=sys.stderr)
+            server.serve_forever(0.01)
+        except KeyboardInterrupt:
+            server.server_close()
+    finally:
+        if certfile:
+            os.rm(certfile)
+        if keyfile:
+            os.rm(keyfile)
 
 
 def parse_args(argv):
