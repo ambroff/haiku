@@ -8,18 +8,18 @@ require any dependencies, and also to allow for adding endpoints to replicate
 behavior of other servers in the future.
 """
 
-import optparse
-import os
-import sys
-import http.server
-import socket
-import io
-import re
+import abc
 import base64
 import gzip
-import zlib
-import abc
 import hashlib
+import http.server
+import io
+import optparse
+import os
+import re
+import socket
+import sys
+import zlib
 
 
 MULTIPART_FORM_BOUNDARY_RE = re.compile(
@@ -250,19 +250,6 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
             auth_type, fields = authorization.split(maxsplit=1)
             if auth_type == 'Digest':
                 credentials = parse_kv_pair_header(fields)
-
-        raw_cookies = self.headers.get('Cookie', None)
-        cookie_data = None
-
-        if raw_cookies is not None:
-            cookie_data = parse_kv_pair_header(raw_cookies, ';')
-
-        # if cookie_data is None or 'fake' not in cookie_data:
-        #     self.send_response(403, 'Forbidden')
-        #     self.send_header('Set-Cookie', 'fake=fake_value; Path=/')
-        #     self.end_headers()
-        #     self.wfile.write('Missing cookie on challenge'.encode('utf-8'))
-        #     return False, extra_headers
 
         expected_response_hash = None
         if credentials:
