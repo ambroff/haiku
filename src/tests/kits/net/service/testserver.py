@@ -435,6 +435,7 @@ def main():
             options.server_socket_fd,
             socket.AF_INET,
             socket.SOCK_STREAM)
+        server.server_port = server.socket.getsockname()[1]
     else:
         # A socket hasn't been open for us already, so we'll just use
         # a random port here.
@@ -476,6 +477,7 @@ def parse_args(argv):
         "--fd",
         dest='server_socket_fd',
         default=None,
+        type='int',
         help='A socket FD to use for accept() instead of binding a new one.')
     options, args = parser.parse_args(argv)
     if len(args) > 1:

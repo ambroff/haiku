@@ -63,6 +63,8 @@ status_t TestServer::Start()
 {
 	// Bind to a random unused TCP port.
 	{
+		// Create socket with port 0 to get an unused one selected by the
+		// kernel.
 		int socket_fd = socket(AF_INET, SOCK_STREAM, 0);
 		if (socket_fd == -1) {
 			fprintf(
@@ -74,6 +76,7 @@ status_t TestServer::Start()
 
 		fSocketFd = socket_fd;
 
+		// Bind to loopback 127.0.0.1
 		struct sockaddr_in server_address;
 		server_address.sin_family = AF_INET;
 		server_address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
@@ -89,13 +92,19 @@ status_t TestServer::Start()
 			return B_ERROR;
 		}
 
+		// Listen is apparently required before getsockname will work.
+		if (::listen(socket_fd, 32) == -1) {
+			fprintf(stderr, "ERROR: listen() failed: %s\n", strerror(errno));
+			return B_ERROR;
+		}
+
+		// Now get the port from the socket.
 		socklen_t server_address_length = sizeof(server_address);
 		getsockname(
 			socket_fd,
 			reinterpret_cast<struct sockaddr*>(&server_address),
 			&server_address_length);
-
-		fServerPort = server_address.sin_port;
+		fServerPort = ntohs(server_address.sin_port);
 	}
 
 	fprintf(stderr, "Binding to port %d\n", fServerPort);
@@ -112,7 +121,6 @@ status_t TestServer::Start()
 		// get ECONNREFUSED and will block until the child process calls
 		// accept(). So we don't have to busy loop here waiting for a
 		// connection to the child.
-		sleep(1);
 		fChildPid = child;
 		return B_OK;
 	}
