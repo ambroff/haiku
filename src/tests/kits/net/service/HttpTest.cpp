@@ -7,12 +7,13 @@
 
 #include "HttpTest.h"
 
-
 #include <algorithm>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <cstdio>
 #include <fstream>
+#include <map>
+#include <string>
 
 #include <HttpRequest.h>
 #include <NetworkKit.h>
@@ -24,6 +25,9 @@
 
 
 namespace {
+
+typedef std::map<std::string, std::string> HttpHeaderMap;
+
 
 class TestListener : public BUrlProtocolListener {
 public:
@@ -302,7 +306,7 @@ HttpTest::AuthBasicTest()
 	CPPUNIT_ASSERT_EQUAL(B_OK, testServer.Start());
 
 	BUrlContext context;
-	
+
 	BUrl testUrl(testServer.BaseUrl(), "/auth/basic/walter/secret");
 
 	std::string expectedResponseBody(

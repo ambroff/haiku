@@ -5,18 +5,12 @@
 #ifndef HTTP_TEST_H
 #define HTTP_TEST_H
 
-#include <map>
-#include <string>
-
 #include <Url.h>
 
 #include <TestCase.h>
 #include <TestSuite.h>
 
 #include <cppunit/TestSuite.h>
-
-
-typedef std::map<std::string, std::string> HttpHeaderMap;
 
 
 class HttpTest: public BTestCase {
