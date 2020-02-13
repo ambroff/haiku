@@ -156,12 +156,6 @@ status_t TestServer::Start()
 }
 
 
-uint16_t TestServer::Port() const
-{
-	return fServerPort;
-}
-
-
 BUrl TestServer::BaseUrl() const
 {
 	std::string baseUrl = "http://127.0.0.1:" + to_string(fServerPort) + "/";

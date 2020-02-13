@@ -11,7 +11,6 @@ public:
 	~TestServer();
 
 	status_t	Start();
-	uint16_t	Port()		const;
 	BUrl		BaseUrl()	const;
 
 private:

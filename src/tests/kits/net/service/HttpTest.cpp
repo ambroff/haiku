@@ -142,14 +142,14 @@ HttpTest::GetTest()
 		"\r\n"
 		"Headers:\r\n"
 		"--------\r\n"
-		"Host: 127.0.0.1:9090\r\n"
+		"Host: 127.0.0.1:PORT\r\n"
 		"Accept: */*\r\n"
 		"Accept-Encoding: gzip\r\n"
 		"Connection: close\r\n"
 		"User-Agent: Services Kit (Haiku)\r\n");
 	HttpHeaderMap expectedResponseHeaders;
 	expectedResponseHeaders["Content-Encoding"] = "gzip";
-	expectedResponseHeaders["Content-Length"] = "143";
+	expectedResponseHeaders["Content-Length"] = "144";
 	expectedResponseHeaders["Content-Type"] = "text/plain";
 	expectedResponseHeaders["Date"] = "Sun, 09 Feb 2020 19:32:42 GMT";
 	expectedResponseHeaders["Server"] = "Test HTTP Server for Haiku";
@@ -167,7 +167,7 @@ HttpTest::GetTest()
 	CPPUNIT_ASSERT_EQUAL(200, result.StatusCode());
 	CPPUNIT_ASSERT_EQUAL(BString("OK"), result.StatusText());
 
-	CPPUNIT_ASSERT_EQUAL(143, result.Length());
+	CPPUNIT_ASSERT_EQUAL(144, result.Length());
 
 	listener.Verify();
 
@@ -175,12 +175,6 @@ HttpTest::GetTest()
 		// This page should not set cookies
 
 	context->ReleaseReference();
-}
-
-
-void
-HttpTest::GetTestConnectionRefused()
-{
 }
 
 
@@ -233,8 +227,6 @@ HttpTest::UploadTest()
 			std::istreambuf_iterator<char>(inputStream),
 			std::istreambuf_iterator<char>());
 		CPPUNIT_ASSERT(!fileContents.empty());
-
-		// The server
 	}
 
 	std::string expectedResponseBody(
@@ -242,7 +234,7 @@ HttpTest::UploadTest()
 		"\r\n"
 		"Headers:\r\n"
 		"--------\r\n"
-		"Host: 127.0.0.1:9090\r\n"
+		"Host: 127.0.0.1:PORT\r\n"
 		"Accept: */*\r\n"
 		"Accept-Encoding: gzip\r\n"
 		"Connection: close\r\n"
@@ -267,7 +259,7 @@ HttpTest::UploadTest()
 		"\r\n");
 	HttpHeaderMap expectedResponseHeaders;
 	expectedResponseHeaders["Content-Encoding"] = "gzip";
-	expectedResponseHeaders["Content-Length"] = "920";
+	expectedResponseHeaders["Content-Length"] = "919";
 	expectedResponseHeaders["Content-Type"] = "text/plain";
 	expectedResponseHeaders["Date"] = "Sun, 09 Feb 2020 19:32:42 GMT";
 	expectedResponseHeaders["Server"] = "Test HTTP Server for Haiku";
@@ -297,7 +289,7 @@ HttpTest::UploadTest()
 		dynamic_cast<const BHttpResult &>(request.Result());
 	CPPUNIT_ASSERT_EQUAL(200, result.StatusCode());
 	CPPUNIT_ASSERT_EQUAL(BString("OK"), result.StatusText());
-	CPPUNIT_ASSERT_EQUAL(920, result.Length());
+	CPPUNIT_ASSERT_EQUAL(919, result.Length());
 
 	listener.Verify();
 }
@@ -318,12 +310,12 @@ HttpTest::AuthBasicTest()
 		"\r\n"
 		"Headers:\r\n"
 		"--------\r\n"
-		"Host: 127.0.0.1:9090\r\n"
+		"Host: 127.0.0.1:PORT\r\n"
 		"Accept: */*\r\n"
 		"Accept-Encoding: gzip\r\n"
 		"Connection: close\r\n"
 		"User-Agent: Services Kit (Haiku)\r\n"
-		"Referer: http://127.0.0.1:9090/auth/basic/walter/secret\r\n"
+		"Referer: http://127.0.0.1:PORT/auth/basic/walter/secret\r\n"
 		"Authorization: Basic d2FsdGVyOnNlY3JldA==\r\n");
 
 	HttpHeaderMap expectedResponseHeaders;
@@ -343,12 +335,6 @@ HttpTest::AuthBasicTest()
 
 
 void
-HttpTest::AuthBasicTestNotAuthorized()
-{
-}
-
-
-void
 HttpTest::AuthDigestTest()
 {
 	TestServer testServer;
@@ -363,12 +349,12 @@ HttpTest::AuthDigestTest()
 		"\r\n"
 		"Headers:\r\n"
 		"--------\r\n"
-		"Host: 127.0.0.1:9090\r\n"
+		"Host: 127.0.0.1:PORT\r\n"
 		"Accept: */*\r\n"
 		"Accept-Encoding: gzip\r\n"
 		"Connection: close\r\n"
 		"User-Agent: Services Kit (Haiku)\r\n"
-		"Referer: http://127.0.0.1:9090/auth/digest/walter/secret\r\n"
+		"Referer: http://127.0.0.1:PORT/auth/digest/walter/secret\r\n"
 		"Authorization: Digest username=\"walter\","
 		" realm=\"user@shredder\","
 		" nonce=\"f3a95f20879dd891a5544bf96a3e5518\","
@@ -383,7 +369,7 @@ HttpTest::AuthDigestTest()
 
 	HttpHeaderMap expectedResponseHeaders;
 	expectedResponseHeaders["Content-Encoding"] = "gzip";
-	expectedResponseHeaders["Content-Length"] = "399";
+	expectedResponseHeaders["Content-Length"] = "401";
 	expectedResponseHeaders["Content-Type"] = "text/plain";
 	expectedResponseHeaders["Date"] = "Sun, 09 Feb 2020 19:32:42 GMT";
 	expectedResponseHeaders["Server"] = "Test HTTP Server for Haiku";
@@ -420,12 +406,6 @@ HttpTest::_AddCommonTests(BString prefix, CppUnit::TestSuite& suite)
 	name = prefix;
 	name << "GetTest";
 	suite.addTest(new CppUnit::TestCaller<T>(name.String(), &T::GetTest));
-
-	name = prefix;
-	name << "GetTestConnectionRefused";
-	suite.addTest(new CppUnit::TestCaller<T>(
-		name.String(),
-		&T::GetTestConnectionRefused));
 
 	name = prefix;
 	name << "UploadTest";

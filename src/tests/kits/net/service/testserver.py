@@ -140,6 +140,13 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
         output_stream.write(b'--------\r\n')
         for header in self.headers:
             for header_value in self.headers.get_all(header):
+                if header == 'Host' or header == 'Referer':
+                    # The server port can change between runs which will change
+                    # the size and contents of the response body. To make tests
+                    # that verify the contents of the response body easier the
+                    # server port will be stripped from these headers when
+                    # echoed to the response body.
+                    header_value = re.sub(r':[0-9]+', ':PORT', header_value)
                 if header == 'Content-Type':
                     match = MULTIPART_FORM_BOUNDARY_RE.match(
                         self.headers.get('Content-Type', 'text/plain'))

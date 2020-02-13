@@ -25,10 +25,8 @@ public:
 	virtual								~HttpTest();
 
 								void	GetTest();
-								void	GetTestConnectionRefused();
 								void	UploadTest();
 								void	AuthBasicTest();
-								void	AuthBasicTestNotAuthorized();
 								void	AuthDigestTest();
 								void	ProxyTest();
 
