@@ -19,31 +19,29 @@
 
 class HttpTest: public BThreadedTestCase {
 public:
-											HttpTest(TestServerMode mode
-												= TEST_SERVER_MODE_HTTP);
-	virtual									~HttpTest();
+						HttpTest(TestServerMode mode = TEST_SERVER_MODE_HTTP);
+	virtual				~HttpTest();
 
-	virtual						void		setUp();
+	virtual	void		setUp();
 
-								void		GetTest();
-								void		UploadTest();
-								void		AuthBasicTest();
-								void		AuthDigestTest();
-								void		ProxyTest();
+			void		GetTest();
+			void		UploadTest();
+			void		AuthBasicTest();
+			void		AuthDigestTest();
+			void		ProxyTest();
 
-	static						void		AddTests(BTestSuite& suite);
+	static	void		AddTests(BTestSuite& suite);
 
-private:
-	template<class T> static	void		_AddCommonTests(BString prefix,
-												CppUnit::TestSuite& suite);
-
-								TestServer	fTestServer;
+protected:
+			TestServer	fTestServer;
 };
 
 
 class HttpsTest: public HttpTest {
 public:
-								HttpsTest();
+						HttpsTest();
+			void		CertificateVerificationFailureTest();
+			void		CertificateVerificationCommonNameTest();
 };
 
 

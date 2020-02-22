@@ -31,6 +31,40 @@ namespace {
 typedef std::map<std::string, std::string> HttpHeaderMap;
 
 
+class CertificateValidationTestListener : public BUrlProtocolListener {
+public:
+	// When constructing this, provide the number of times a certificate should
+	// be trusted when validation fails.
+	CertificateValidationTestListener(std::size_t certificate_exception_count)
+		:
+		fCertificateExceptionsToPerform(certificate_exception_count),
+		fCertificateExceptionCount(0)
+	{
+	}
+
+	virtual bool CertificateVerificationFailed(
+		BUrlRequest* caller,
+		BCertificate& certificate,
+		const char* message)
+	{
+		if (fCertificateExceptionsToPerform == 0) {
+			return false;
+		}
+
+		--fCertificateExceptionsToPerform;
+		++fCertificateExceptionCount;
+		return true;
+	}
+
+private:
+	// Every time a certificate is encountered which is untrusted, this is
+	// decremented. Once this reaches zero, newly encountered untrusted
+	// certificates will not be trusted.
+	std::size_t	fCertificateExceptionsToPerform;
+	std::size_t	fCertificateExceptionCount;
+};
+
+
 class TestListener : public BUrlProtocolListener {
 public:
 	TestListener(const std::string& expectedResponseBody,
@@ -74,18 +108,11 @@ public:
 		BCertificate& certificate,
 		const char* message)
 	{
-		// TODO: Add tests that exercize this behavior.
-		//
-		// At the moment there doesn't seem to be any public API for providing
-		// an alternate certificate authority, or for constructing a
-		// BCertificate to be sent to BUrlContext::AddCertificateException().
-		// Once we have such a public API then it will be useful to create
-		// test scenarios that exercize the validation performed by the
-		// undrelying TLS implementaiton to verify that it is configured
-		// to do so.
-		//
-		// For now we just disable TLS certificate validation entirely because
-		// we are generating a self-signed TLS certificate for these tests.
+		// This listener is not used to test certificate validation, so for
+		// all tests which use it we just trust all certificates no matter
+		// what. This is required since testserver.py is generating a
+		// self-signed TLS certificate for each run and there is currently no
+		// way to provide a custom certificate authority.
 		return true;
 	}
 
@@ -103,17 +130,31 @@ public:
 				fExpectedResponseHeaders[iter->first],
 				iter->second);
 		}
+
 		CPPUNIT_ASSERT_EQUAL(
 			fExpectedResponseHeaders.size(),
 			fActualResponseHeaders.size());
+
+		{
+			std::map<std::string, std::size_t>::iterator iter
+				= fCertificateExceptionCountMap.begin();
+			while (iter != fCertificateExceptionCountMap.end()) {
+				CPPUNIT_ASSERT(iter->second <= 1);
+				++iter;
+			}
+		}
 	}
 
 private:
-	std::string fExpectedResponseBody;
-	std::string fActualResponseBody;
+	std::string							fExpectedResponseBody;
+	std::string							fActualResponseBody;
 
-	HttpHeaderMap fExpectedResponseHeaders;
-	HttpHeaderMap fActualResponseHeaders;
+	HttpHeaderMap						fExpectedResponseHeaders;
+	HttpHeaderMap						fActualResponseHeaders;
+
+	bool								fTrustAllCertificates;
+	
+	std::map<std::string, std::size_t>	fCertificateExceptionCountMap;
 };
 
 
@@ -157,6 +198,16 @@ std::string TestFilePath(const std::string& relativePath)
 	std::string testSrcDir(::dirname(testFileSource));
 
 	return testSrcDir + "/" + relativePath;
+}
+
+
+template<class T>
+void _AddCommonTests(BThreadedTestCaller<T>& testCaller)
+{
+	testCaller.addThread("GetTest", &T::GetTest);
+	testCaller.addThread("UploadTest", &T::UploadTest);
+	testCaller.addThread("BasicAuthTest", &T::AuthBasicTest);
+	testCaller.addThread("DigestAuthTest", &T::AuthDigestTest);
 }
 
 }
@@ -454,45 +505,45 @@ HttpTest::AuthDigestTest()
 }
 
 
-/* static */ template<class T> void
-HttpTest::_AddCommonTests(BString prefix, CppUnit::TestSuite& suite)
-{
-	T* test = new T();
-	BThreadedTestCaller<T>* testCaller
-		= new BThreadedTestCaller<T>(prefix.String(), test);
-
-	testCaller->addThread("GetTest", &T::GetTest);
-	testCaller->addThread("UploadTest", &T::UploadTest);
-	testCaller->addThread("BasicAuthTest", &T::AuthBasicTest);
-	testCaller->addThread("DigestAuthTest", &T::AuthDigestTest);
-
-	suite.addTest(testCaller);
-}
-
-
 /* static */ void
 HttpTest::AddTests(BTestSuite& parent)
 {
 	{
 		CppUnit::TestSuite& suite = *new CppUnit::TestSuite("HttpTest");
 
+		HttpTest* httpTest = new HttpTest();
+		BThreadedTestCaller<HttpTest>* httpTestCaller = new BThreadedTestCaller<HttpTest>("HttpTest::", httpTest);
+
 		// HTTP + HTTPs
-		_AddCommonTests<HttpTest>("HttpTest::", suite);
+		_AddCommonTests<HttpTest>(*httpTestCaller);
 
 		// TODO: reaches out to some mysterious IP 120.203.214.182 which does
 		// not respond anymore?
 		//suite.addTest(new CppUnit::TestCaller<HttpTest>("HttpTest::ProxyTest",
 		//	&HttpTest::ProxyTest));
 
+		suite.addTest(httpTestCaller);
 		parent.addTest("HttpTest", &suite);
 	}
 
 	{
 		CppUnit::TestSuite& suite = *new CppUnit::TestSuite("HttpsTest");
 
-		// HTTP + HTTPs
-		_AddCommonTests<HttpsTest>("HttpsTest::", suite);
+		HttpsTest* httpsTest = new HttpsTest();
+		BThreadedTestCaller<HttpsTest>* httpsTestCaller
+			= new BThreadedTestCaller<HttpsTest>("HttpsTest::", httpsTest);
 
+		// HTTP + HTTPs
+		_AddCommonTests<HttpsTest>(*httpsTestCaller);
+
+		httpsTestCaller->addThread(
+			"CertificateVerificationFailureTest",
+			&HttpsTest::CertificateVerificationFailureTest);
+		httpsTestCaller->addThread(
+			"CertificateVerificationCommonNameTest",
+			&HttpsTest::CertificateVerificationCommonNameTest);
+
+		suite.addTest(httpsTestCaller);
 		parent.addTest("HttpsTest", &suite);
 	}
 }
@@ -505,4 +556,48 @@ HttpsTest::HttpsTest()
 	:
 	HttpTest(TEST_SERVER_MODE_HTTPS)
 {
+}
+
+
+void HttpsTest::CertificateVerificationFailureTest()
+{
+	CertificateValidationTestListener listener(0);
+
+	BUrl testUrl(fTestServer.BaseUrl(), "/");
+
+	BUrlContext context;
+
+	BHttpRequest request(testUrl, true);
+	request.SetContext(&context);
+	request.SetListener(&listener);
+
+	CPPUNIT_ASSERT(request.Run());
+
+	while (request.IsRunning())
+		snooze(1000);
+
+	CPPUNIT_ASSERT_EQUAL(B_NOT_ALLOWED, request.Status());
+}
+
+
+void HttpsTest::CertificateVerificationCommonNameTest()
+{
+	// We only allow one
+	CertificateValidationTestListener listener(1);
+
+	BUrl testUrl(fTestServer.BaseUrl(), "/");
+
+	BUrlContext context;
+
+	BHttpRequest request(testUrl, true);
+	request.SetContext(&context);
+	request.SetListener(&listener);
+
+	CPPUNIT_ASSERT(request.Run());
+
+	while (request.IsRunning())
+		snooze(1000);
+
+	CPPUNIT_ASSERT_EQUAL(B_NOT_ALLOWED, request.Status());
+
 }
