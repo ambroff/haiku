@@ -31,6 +31,48 @@ namespace {
 typedef std::map<std::string, std::string> HttpHeaderMap;
 
 
+class CertificateValidationTestListener : public BUrlProtocolListener {
+public:
+	// When constructing this, provide the number of times a certificate should
+	// be trusted when validation fails.
+	CertificateValidationTestListener(std::size_t certificate_exception_count)
+		:
+		fCertificateExceptionsToPerform(certificate_exception_count),
+		fCertificateExceptionCount(0)
+	{
+	}
+
+	virtual bool CertificateVerificationFailed(
+		BUrlRequest* caller,
+		BCertificate& certificate,
+		const char* message)
+	{
+		fprintf(stderr, "KWA: certificate validation failed: %s\n", message);
+		if (fCertificateExceptionsToPerform == 0) {
+			return false;
+		}
+
+		--fCertificateExceptionsToPerform;
+		++fCertificateExceptionCount;
+		return true;
+	}
+
+
+	std::size_t CertificateExceptionCount() const
+	{
+		return fCertificateExceptionCount;
+	}
+
+	
+private:
+	// Every time a certificate is encountered which is untrusted, this is
+	// decremented. Once this reaches zero, newly encountered untrusted
+	// certificates will not be trusted.
+	std::size_t	fCertificateExceptionsToPerform;
+	std::size_t	fCertificateExceptionCount;
+};
+
+
 class TestListener : public BUrlProtocolListener {
 public:
 	TestListener(const std::string& expectedResponseBody,
@@ -74,18 +116,11 @@ public:
 		BCertificate& certificate,
 		const char* message)
 	{
-		// TODO: Add tests that exercize this behavior.
-		//
-		// At the moment there doesn't seem to be any public API for providing
-		// an alternate certificate authority, or for constructing a
-		// BCertificate to be sent to BUrlContext::AddCertificateException().
-		// Once we have such a public API then it will be useful to create
-		// test scenarios that exercize the validation performed by the
-		// undrelying TLS implementaiton to verify that it is configured
-		// to do so.
-		//
-		// For now we just disable TLS certificate validation entirely because
-		// we are generating a self-signed TLS certificate for these tests.
+		// This listener is not used to test certificate validation, so for
+		// all tests which use it we just trust all certificates no matter
+		// what. This is required since testserver.py is generating a
+		// self-signed TLS certificate for each run and there is currently no
+		// way to provide a custom certificate authority.
 		return true;
 	}
 
@@ -103,17 +138,31 @@ public:
 				fExpectedResponseHeaders[iter->first],
 				iter->second);
 		}
+
 		CPPUNIT_ASSERT_EQUAL(
 			fExpectedResponseHeaders.size(),
 			fActualResponseHeaders.size());
+
+		{
+			std::map<std::string, std::size_t>::iterator iter
+				= fCertificateExceptionCountMap.begin();
+			while (iter != fCertificateExceptionCountMap.end()) {
+				CPPUNIT_ASSERT(iter->second <= 1);
+				++iter;
+			}
+		}
 	}
 
 private:
-	std::string fExpectedResponseBody;
-	std::string fActualResponseBody;
+	std::string							fExpectedResponseBody;
+	std::string							fActualResponseBody;
 
-	HttpHeaderMap fExpectedResponseHeaders;
-	HttpHeaderMap fActualResponseHeaders;
+	HttpHeaderMap						fExpectedResponseHeaders;
+	HttpHeaderMap						fActualResponseHeaders;
+
+	bool								fTrustAllCertificates;
+	
+	std::map<std::string, std::size_t>	fCertificateExceptionCountMap;
 };
 
 
@@ -521,6 +570,13 @@ HttpTest::AddTests(BTestSuite& parent)
 		// HTTP + HTTPs
 		AddCommonTests<HttpsTest>(*httpsTestCaller);
 
+		httpsTestCaller->addThread(
+			"CertificateVerificationFailureTest",
+			&HttpsTest::CertificateVerificationFailureTest);
+		httpsTestCaller->addThread(
+			"CertificateVerificationCommonNameTest",
+			&HttpsTest::CertificateVerificationCommonNameTest);
+
 		suite.addTest(httpsTestCaller);
 		parent.addTest("HttpsTest", &suite);
 	}
@@ -534,4 +590,117 @@ HttpsTest::HttpsTest()
 	:
 	HttpTest(TEST_SERVER_MODE_HTTPS)
 {
+}
+
+
+// TODO: Once there is a public API for providing a different CA, we should add
+// some additional test cases here:
+//
+// 1. Issue a request to a server with a trusted certificate, but use a
+//    hostname in the request which doesn't match the CommonName field of the
+//    certificate.
+//
+// 2. Issue a request to a server with an expired certifidcate.
+//
+// 3. Issue a request to a server with a revoked certificate.
+void HttpsTest::CertificateVerificationExceptionTest() {
+	CertificateValidationTestListener listener(0);
+
+	BUrl testUrl(fTestServer.BaseUrl(), "/");
+
+	BUrlContext context;
+
+	BHttpRequest request(testUrl, true);
+	request.SetContext(&context);
+	request.SetListener(&listener);
+
+	CPPUNIT_ASSERT(request.Run());
+
+	while (request.IsRunning())
+		snooze(1000);
+
+	CPPUNIT_ASSERT_EQUAL(B_OK, request.Status());
+
+	CPPUNIT_ASSERT_EQUAL(1, listener.CertificateExceptionCount());
+}
+
+
+void HttpsTest::CertificateVerificationFailureTest()
+{
+	CertificateValidationTestListener listener(0);
+
+	BUrl testUrl(fTestServer.BaseUrl(), "/");
+
+	BUrlContext context;
+
+	BHttpRequest request(testUrl, true);
+	request.SetContext(&context);
+	request.SetListener(&listener);
+
+	CPPUNIT_ASSERT(request.Run());
+
+	while (request.IsRunning())
+		snooze(1000);
+
+	CPPUNIT_ASSERT_EQUAL(B_NOT_ALLOWED, request.Status());
+}
+
+
+void HttpsTest::CertificateVerificationCommonNameTest()
+{
+	// Specify that we will add an exception for exactly one TLS certificate
+	// validation error.
+	CertificateValidationTestListener listener(1);
+	BUrl testUrl(fTestServer.BaseUrl(), "/");
+
+	BUrlContext context;
+
+	// The first request will succeed because we've added an exception.
+	{
+		BHttpRequest request(testUrl, true);
+		request.SetContext(&context);
+		request.SetListener(&listener);
+
+		CPPUNIT_ASSERT(request.Run());
+
+		while (request.IsRunning())
+			snooze(1000);
+
+		CPPUNIT_ASSERT_EQUAL(B_OK, request.Status());
+	}
+
+	// The second request will succeed because an exception has already been
+	// added.
+	{
+          BHttpRequest request(testUrl, true);
+          request.SetContext(&context);
+          request.SetListener(&listener);
+
+          CPPUNIT_ASSERT(request.Run());
+
+          while (request.IsRunning())
+            snooze(1000);
+
+          CPPUNIT_ASSERT_EQUAL(B_OK, request.Status());
+	}
+
+	// This third attempt will fail because, although we trust the server's
+	// certificate, the hostname we use in this URL will not match the
+	// certificate's common-name field, which should be set to 127.0.0.1
+	// (see TestServer.cpp and testserver.py).
+	{
+		BUrl url(testUrl);
+		url.SetHost("localhost");
+
+		BHttpRequest request(testUrl, true);
+		request.SetContext(&context);
+		request.SetListener(&listener);
+
+		CPPUNIT_ASSERT(request.Run());
+
+		while (request.IsRunning())
+			snooze(1000);
+
+		CPPUNIT_ASSERT_EQUAL(B_NOT_ALLOWED, request.Status());
+	}
 }

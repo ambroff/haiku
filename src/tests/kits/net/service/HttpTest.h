@@ -32,7 +32,7 @@ public:
 
 	static	void		AddTests(BTestSuite& suite);
 
-private:
+protected:
 			TestServer	fTestServer;
 };
 
@@ -40,6 +40,10 @@ private:
 class HttpsTest: public HttpTest {
 public:
 						HttpsTest();
+
+			void		CertificateVerificationExceptionTest();
+			void		CertificateVerificationFailureTest();
+			void		CertificateVerificationCommonNameTest();
 };
 
 
