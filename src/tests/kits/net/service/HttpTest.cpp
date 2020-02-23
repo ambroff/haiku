@@ -57,6 +57,13 @@ public:
 		return true;
 	}
 
+
+	std::size_t CertificateExceptionCount() const
+	{
+		return fCertificateExceptionCount;
+	}
+
+	
 private:
 	// Every time a certificate is encountered which is untrusted, this is
 	// decremented. Once this reaches zero, newly encountered untrusted
@@ -557,6 +564,38 @@ HttpsTest::HttpsTest()
 	:
 	HttpTest(TEST_SERVER_MODE_HTTPS)
 {
+}
+
+
+// TODO: Once there is a public API for providing a different CA, we should add
+// some additional test cases here:
+//
+// 1. Issue a request to a server with a trusted certificate, but use a
+//    hostname in the request which doesn't match the CommonName field of the
+//    certificate.
+//
+// 2. Issue a request to a server with an expired certifidcate.
+//
+// 3. Issue a request to a server with a revoked certificate.
+void HttpsTest::CertificateVerificationExceptionTest() {
+	CertificateValidationTestListener listener(0);
+
+	BUrl testUrl(fTestServer.BaseUrl(), "/");
+
+	BUrlContext context;
+
+	BHttpRequest request(testUrl, true);
+	request.SetContext(&context);
+	request.SetListener(&listener);
+
+	CPPUNIT_ASSERT(request.Run());
+
+	while (request.IsRunning())
+		snooze(1000);
+
+	CPPUNIT_ASSERT_EQUAL(B_OK, request.Status());
+
+	CPPUNIT_ASSERT_EQUAL(1, listener.CertificateExceptionCount());
 }
 
 
