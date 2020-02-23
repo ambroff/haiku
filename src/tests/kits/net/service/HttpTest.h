@@ -40,6 +40,8 @@ protected:
 class HttpsTest: public HttpTest {
 public:
 						HttpsTest();
+
+			void		CertificateVerificationExceptionTest();
 			void		CertificateVerificationFailureTest();
 			void		CertificateVerificationCommonNameTest();
 };
