@@ -47,6 +47,7 @@ public:
 		BCertificate& certificate,
 		const char* message)
 	{
+		fprintf(stderr, "KWA: certificate validation failed: %s\n", message);
 		if (fCertificateExceptionsToPerform == 0) {
 			return false;
 		}
@@ -582,22 +583,59 @@ void HttpsTest::CertificateVerificationFailureTest()
 
 void HttpsTest::CertificateVerificationCommonNameTest()
 {
-	// We only allow one
+	// Specify that we will add an exception for exactly one TLS certificate
+	// validation error.
 	CertificateValidationTestListener listener(1);
-
 	BUrl testUrl(fTestServer.BaseUrl(), "/");
 
 	BUrlContext context;
 
-	BHttpRequest request(testUrl, true);
-	request.SetContext(&context);
-	request.SetListener(&listener);
+	// The first request will succeed because we've added an exception.
+	{
+		BHttpRequest request(testUrl, true);
+		request.SetContext(&context);
+		request.SetListener(&listener);
 
-	CPPUNIT_ASSERT(request.Run());
+		CPPUNIT_ASSERT(request.Run());
 
-	while (request.IsRunning())
-		snooze(1000);
+		while (request.IsRunning())
+			snooze(1000);
 
-	CPPUNIT_ASSERT_EQUAL(B_NOT_ALLOWED, request.Status());
+		CPPUNIT_ASSERT_EQUAL(B_OK, request.Status());
+	}
 
+	// The second request will succeed because an exception has already been
+	// added.
+	{
+          BHttpRequest request(testUrl, true);
+          request.SetContext(&context);
+          request.SetListener(&listener);
+
+          CPPUNIT_ASSERT(request.Run());
+
+          while (request.IsRunning())
+            snooze(1000);
+
+          CPPUNIT_ASSERT_EQUAL(B_OK, request.Status());
+	}
+
+	// This third attempt will fail because, although we trust the server's
+	// certificate, the hostname we use in this URL will not match the
+	// certificate's common-name field, which should be set to 127.0.0.1
+	// (see TestServer.cpp and testserver.py).
+	{
+		BUrl url(testUrl);
+		url.SetHost("localhost");
+
+		BHttpRequest request(testUrl, true);
+		request.SetContext(&context);
+		request.SetListener(&listener);
+
+		CPPUNIT_ASSERT(request.Run());
+
+		while (request.IsRunning())
+			snooze(1000);
+
+		CPPUNIT_ASSERT_EQUAL(B_NOT_ALLOWED, request.Status());
+	}
 }
