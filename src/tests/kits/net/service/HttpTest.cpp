@@ -203,7 +203,7 @@ std::string TestFilePath(const std::string& relativePath)
 
 
 template<class T>
-void _AddCommonTests(BThreadedTestCaller<T>& testCaller)
+void AddCommonTests(BThreadedTestCaller<T>& testCaller)
 {
 	testCaller.addThread("GetTest", &T::GetTest);
 	testCaller.addThread("UploadTest", &T::UploadTest);
@@ -516,12 +516,12 @@ HttpTest::AddTests(BTestSuite& parent)
 		BThreadedTestCaller<HttpTest>* httpTestCaller = new BThreadedTestCaller<HttpTest>("HttpTest::", httpTest);
 
 		// HTTP + HTTPs
-		_AddCommonTests<HttpTest>(*httpTestCaller);
+		AddCommonTests<HttpTest>(*httpTestCaller);
 
-		// TODO: reaches out to some mysterious IP 120.203.214.182 which does
-		// not respond anymore?
-		//suite.addTest(new CppUnit::TestCaller<HttpTest>("HttpTest::ProxyTest",
-		//	&HttpTest::ProxyTest));
+		// TODO: Add a test proxy to support ProxyTest and then re-enable this.
+		// httpTestCaller->addThread(
+		// 	"ProxyTest",
+		// 	&HttpTest::ProxyTest);
 
 		suite.addTest(httpTestCaller);
 		parent.addTest("HttpTest", &suite);
@@ -535,7 +535,7 @@ HttpTest::AddTests(BTestSuite& parent)
 			= new BThreadedTestCaller<HttpsTest>("HttpsTest::", httpsTest);
 
 		// HTTP + HTTPs
-		_AddCommonTests<HttpsTest>(*httpsTestCaller);
+		AddCommonTests<HttpsTest>(*httpsTestCaller);
 
 		httpsTestCaller->addThread(
 			"CertificateVerificationFailureTest",
