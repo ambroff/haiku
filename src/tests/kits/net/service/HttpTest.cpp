@@ -63,7 +63,7 @@ public:
 		return fCertificateExceptionCount;
 	}
 
-	
+
 private:
 	// Every time a certificate is encountered which is untrusted, this is
 	// decremented. Once this reaches zero, newly encountered untrusted
