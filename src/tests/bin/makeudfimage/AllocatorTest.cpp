@@ -103,7 +103,7 @@ AllocatorTest::PartitionFullTest() {
 		extent_address extent;
 		Allocator allocator(2048);
 		CHK(allocator.InitCheck() == B_OK);
-		CHK(allocator.GetNextExtent(ULONG_MAX-1, true, extent) == B_OK);
+		CHK(allocator.GetNextExtent(UINT32_MAX-1, true, extent) == B_OK);
 		CHK(allocator.GetNextExtent(1, true, extent) != B_OK);
 		extent.set_location(256);
 		extent.set_length(1);
@@ -116,7 +116,7 @@ AllocatorTest::PartitionFullTest() {
 		const uint32 blockSize = 2048;
 		Allocator allocator(blockSize);
 		CHK(allocator.InitCheck() == B_OK);
-		CHK(allocator.GetNextExtent(ULONG_MAX-blockSize*2, true, extent) == B_OK);
+		CHK(allocator.GetNextExtent(UINT32_MAX-blockSize*2, true, extent) == B_OK);
 		CHK(allocator.GetNextExtent(1, true, extent) == B_OK);
 		extent.set_location(256);
 		extent.set_length(1);
@@ -133,7 +133,7 @@ AllocatorTest::PartitionFullTest() {
 		const uint32 blockSize = 2048;
 		Allocator allocator(blockSize);
 		CHK(allocator.InitCheck() == B_OK);
-		CHK(allocator.GetNextExtent(ULONG_MAX, true, extent) == B_OK);
+		CHK(allocator.GetNextExtent(UINT32_MAX, true, extent) == B_OK);
 		PhysicalPartitionAllocator partition(0, 0, allocator);
 		std::list<long_address> extents;
     	std::list<extent_address> physicalExtents;

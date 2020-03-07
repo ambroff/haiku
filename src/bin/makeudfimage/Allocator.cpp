@@ -10,6 +10,8 @@
 	Physical block allocator class implementation.
 */
 
+#define DEBUG 1
+
 #include "Allocator.h"
 
 #include <limits.h>
@@ -215,8 +217,8 @@ Allocator::GetNextExtent(uint32 _length, bool contiguous,
 			}			 
 		}
 		// No sufficient chunk found, so try to allocate from the tail
-		PRINT(("ULONG_MAX: %lu\n", ULONG_MAX));
-		uint32 maxLength = ULONG_MAX-Length();
+		PRINT(("UINT32_MAX: %lu\n", UINT32_MAX));
+		uint32 maxLength = UINT32_MAX-Length();
 		PRINT(("maxLength: %lu\n", maxLength));
 		error = maxLength > 0 ? B_OK : B_DEVICE_FULL;
 		if (!error) {
