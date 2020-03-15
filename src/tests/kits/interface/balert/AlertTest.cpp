@@ -151,11 +151,11 @@ AlertTestInfo::GuiInfoTest()
 		fAlertType
 	);
 	CPPUNIT_ASSERT(pAlert);
-	
+
 	// Alert Window Width/Height
 	fTest->NextSubTest();
-	ASSERT_DEQUAL(fWinInfo.width, pAlert->Bounds().Width());
-	ASSERT_DEQUAL(fWinInfo.height, pAlert->Bounds().Height());
+	ASSERT_DEQUAL(100.0f, pAlert->Bounds().Width());
+	ASSERT_DEQUAL(100.0f, pAlert->Bounds().Height());
 	
 	// [k] MasterView
 	fTest->NextSubTest();
@@ -179,17 +179,17 @@ AlertTestInfo::GuiInfoTest()
 		} else {
 			// If there should be a button at this index
 			CPPUNIT_ASSERT(btns[i]);
-			
+
 			CPPUNIT_ASSERT(
 				strcmp(fButtonInfo[i].label, btns[i]->Label()) == 0);
 				
-			ASSERT_DEQUAL(fButtonInfo[i].width, btns[i]->Bounds().Width());
+			ASSERT_DEQUAL(-1.0f, btns[i]->Bounds().Width());
 			
-			ASSERT_DEQUAL(fButtonInfo[i].height, btns[i]->Bounds().Height());
+			ASSERT_DEQUAL(-1.0f, btns[i]->Bounds().Height());
 			
 			BPoint pt = btns[i]->ConvertToParent(BPoint(0, 0));
-			ASSERT_DEQUAL(fButtonInfo[i].topleft.x, pt.x);
-			ASSERT_DEQUAL(fButtonInfo[i].topleft.y, pt.y);
+			ASSERT_DEQUAL(0.0f, pt.x);
+			ASSERT_DEQUAL(0.0f, pt.y);
 			
 			if (i == fButtonCount - 1) {
 				// Default button
@@ -197,44 +197,73 @@ AlertTestInfo::GuiInfoTest()
 			}
 		}
 	}
-	
+
 	// [k] TextView
 	fTest->NextSubTest();
 	BTextView *textView = pAlert->TextView();
 	CPPUNIT_ASSERT(textView);
-	
+
 	// [k] TextView ViewColor()
 	fTest->NextSubTest();
 	CPPUNIT_ASSERT_EQUAL(ui_color(B_PANEL_BACKGROUND_COLOR), textView->ViewColor());
-	
+
 	// [k] TextView IsEditable()
 	fTest->NextSubTest();
 	CPPUNIT_ASSERT_EQUAL(false, textView->IsEditable());
-	
+
 	// [k] TextView IsSelectable()
 	fTest->NextSubTest();
 	CPPUNIT_ASSERT_EQUAL(false, textView->IsSelectable());
-	
+
 	// [k] TextView DoesWordWrap()
 	fTest->NextSubTest();
 	CPPUNIT_ASSERT_EQUAL(true, textView->DoesWordWrap());
-	
+
 	// TextView Text
 	fTest->NextSubTest();
 	CPPUNIT_ASSERT(strcmp(fTextInfo.label, textView->Text()) == 0);
-	
+
 	// TextView Width/Height
 	fTest->NextSubTest();
-	ASSERT_DEQUAL(fTextInfo.width, textView->Bounds().Width());
-	ASSERT_DEQUAL(fTextInfo.height, textView->Bounds().Height());
-	
+	ASSERT_DEQUAL(-1.0f, textView->Bounds().Width());
+	ASSERT_DEQUAL(-1.0f, textView->Bounds().Height());
+
 	// TextView Position
 	fTest->NextSubTest();
 	BPoint pt = textView->ConvertToParent(BPoint(0, 0));
+	ASSERT_DEQUAL(0.0f, pt.x);
+	ASSERT_DEQUAL(0.0f, pt.y);
+
+	// Now we can show the alert, hit the default button, and verify that
+	// the proper layout was computed.
+	fTest->NextSubTest();
+	int32 buttonPressed = pAlert->Go();
+	ASSERT_DEQUAL(0, buttonPressed);
+
+	fTest->NextSubTest();
+	ASSERT_DEQUAL(fWinInfo.width, pAlert->Bounds().Width());
+	ASSERT_DEQUAL(fWinInfo.height, pAlert->Bounds().Height());
+
+	fTest->NextSubTest();
+	for (int32_t i = 0; i < fButtonCount; ++i) {
+		ASSERT_DEQUAL(fButtonInfo[i].width, btns[i]->Bounds().Width());
+		ASSERT_DEQUAL(fButtonInfo[i].height, btns[i]->Bounds().Height());
+
+		BPoint pt = btns[i]->ConvertToParent(BPoint(0, 0));
+		ASSERT_DEQUAL(fButtonInfo[i].topleft.x, pt.x);
+		ASSERT_DEQUAL(fButtonInfo[i].topleft.y, pt.y);
+	}
+
+	fTest->NextSubTest();
+	ASSERT_DEQUAL(fTextInfo.width, textView->Bounds().Width());
+	ASSERT_DEQUAL(fTextInfo.height, textView->Bounds().Height());
+
+	fTest->NextSubTest();
+	pt = textView->ConvertToParent(BPoint(0, 0));
 	ASSERT_DEQUAL(fTextInfo.topleft.x, pt.x);
 	ASSERT_DEQUAL(fTextInfo.topleft.y, pt.y);
 	
-	delete pAlert;
+	//delete pAlert;
 	pAlert = NULL;	
 }
 
@@ -362,20 +391,20 @@ AlertTest::empty_empty_UW_ES_IA()
 	AlertTestInfo ati(this);
 	GuiInfo wi, ti, bi;
 	wi.label = "alert1";
-	wi.width = 310.0f;
-	wi.height = 64.0f;
+	wi.width = 338.0f;
+	wi.height = 72.0f;
 	ati.SetWinInfo(wi);
 	
 	ti.label = "";
-	ti.width = 245.0f;
-	ti.height = 13.0f;
-	ti.topleft.Set(55.0f, 6.0f);
+	ti.width = 276.0f;
+	ti.height = 18.0f;
+	ti.topleft.Set(0.0f, 0.0f);
 	ati.SetTextViewInfo(ti);
 	
 	bi.label = "";
 	bi.width = 75.0f;
-	bi.height = 30.0f;
-	bi.topleft.Set(229.0f, 28.0f);
+	bi.height = 35.0f;
+	bi.topleft.Set(0.0f, 0.0f);
 	ati.SetButtonInfo(0, bi);
 	
 	ati.SetButtonWidthMode(B_WIDTH_AS_USUAL);
@@ -391,20 +420,20 @@ AlertTest::OK_X_UW_ES_IA()
 	AlertTestInfo ati(this);
 	GuiInfo wi, ti, bi;
 	wi.label = "alert1";
-	wi.width = 310.0f;
-	wi.height = 64.0f;
+	wi.width = 338.0f;
+	wi.height = 72.0f;
 	ati.SetWinInfo(wi);
 	
 	ti.label = "X";
-	ti.width = 245.0f;
-	ti.height = 13.0f;
-	ti.topleft.Set(55.0f, 6.0f);
+	ti.width = 276.0f;
+	ti.height = 18.0f;
+	ti.topleft.Set(0.0f, 0.0f);
 	ati.SetTextViewInfo(ti);
 	
 	bi.label = "OK";
 	bi.width = 75.0f;
-	bi.height = 30.0f;
-	bi.topleft.Set(229.0f, 28.0f);
+	bi.height = 35.0f;
+	bi.topleft.Set(0.0f, 0.0f);
 	ati.SetButtonInfo(0, bi);
 	
 	ati.SetButtonWidthMode(B_WIDTH_AS_USUAL);

@@ -370,7 +370,7 @@ BAlert::FrameResized(float newWidth, float newHeight)
 void
 BAlert::AddButton(const char* label, char key)
 {
-	if (label == NULL || label[0] == '\0')
+	if (label == NULL)
 		return;
 
 	BButton* button = _CreateButton(fButtons.size(), label);

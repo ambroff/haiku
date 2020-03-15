@@ -316,8 +316,10 @@ BControl::MouseMoved(BPoint where, uint32 code, const BMessage* dragMessage)
 void
 BControl::SetLabel(const char* label)
 {
-	if (label != NULL && !label[0])
-		label = NULL;
+	// We don't want this probably, because it means the label doesn't get
+	// created.
+	// if (label != NULL && !label[0])
+	// 	label = NULL;
 
 	// Has the label been changed?
 	if ((fLabel && label && !strcmp(fLabel, label))

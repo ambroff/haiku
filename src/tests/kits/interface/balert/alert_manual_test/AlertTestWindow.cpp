@@ -15,6 +15,70 @@ const char *k20X = "XXXXXXXXXXXXXXXXXXXX";
 const char *k40X = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
 const char *k60X = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
 
+
+static void which_label(const char *text, BString& outString)
+{
+	int nX = 0;
+	if (strcmp(text, k60X) == 0)
+		nX = 60;
+	else if (strcmp(text, k40X) == 0)
+		nX = 40;
+	else if (strcmp(text, k20X) == 0)
+		nX = 20;
+	
+	outString = "";
+	if (nX == 0) {
+		outString << '"' << text << '"';
+	} else {
+		outString << 'k' << nX << 'X';
+	}
+}
+
+
+static void dump_info(
+	BAlert* pAlert,
+	BButton** pBtns,
+	BTextView* pTextView,
+	BString& strLabel)
+{
+	// Window info
+	printf("wi.width = %.1ff;\n"
+		   "wi.height = %.1ff;\n"
+		   "ati.SetWinInfo(wi);\n",
+		   pAlert->Bounds().Width(), pAlert->Bounds().Height());
+		
+	// TextView info
+	printf("\n");
+	which_label(pTextView->Text(), strLabel);
+	BPoint pt = pTextView->ConvertToParent(BPoint(0, 0));
+	printf("ti.label = %s;\n"
+		   "ti.width = %.1ff;\n"
+		   "ti.height = %.1ff;\n"
+		   "ti.topleft.Set(%.1ff, %.1ff);\n"
+		   "ati.SetTextViewInfo(ti);\n",
+		   strLabel.String(), pTextView->Bounds().Width(),
+		   pTextView->Bounds().Height(), pt.x, pt.y);
+		
+	// Button info
+	printf("\n");
+	int32 i = 0;
+	while (i < 3 && pBtns[i] != NULL) {
+		BButton *pb = pBtns[i];
+		which_label(pb->Label(), strLabel);
+		pt = pb->ConvertToParent(BPoint(0, 0));
+		printf("bi.label = %s;\n"
+			   "bi.width = %.1ff;\n"
+			   "bi.height = %.1ff;\n"
+			   "bi.topleft.Set(%.1ff, %.1ff);\n"
+			   "ati.SetButtonInfo(%d, bi);\n",
+			   strLabel.String(), pb->Bounds().Width(),
+			   pb->Bounds().Height(), pt.x, pt.y,
+			   (int)i);
+		i++;
+	}
+}
+
+
 AlertTestWindow::AlertTestWindow(BRect frame)
 	: BWindow(frame, "AlertTestWindow", B_TITLED_WINDOW,
 		B_NOT_RESIZABLE | B_NOT_ZOOMABLE)
@@ -65,24 +129,6 @@ AlertTestWindow::MessageReceived(BMessage *message)
 	}
 }
 
-void which_label(const char *text, BString &outString)
-{
-	int nX = 0;
-	if (strcmp(text, k60X) == 0)
-		nX = 60;
-	else if (strcmp(text, k40X) == 0)
-		nX = 40;
-	else if (strcmp(text, k20X) == 0)
-		nX = 20;
-	
-	outString = "";
-	if (nX == 0) {
-		outString << '"' << text << '"';
-	} else {
-		outString << 'k' << nX << 'X';
-	}
-}
-
 void
 AlertTestWindow::Test()
 {
@@ -99,7 +145,6 @@ AlertTestWindow::Test()
 		master->SetViewUIColor(B_MENU_BACKGROUND_COLOR);
 	}
 	
-	BPoint pt;
 	BString strLabel;
 	BButton *pBtns[3] = { NULL };
 	pBtns[0] = pAlert->ButtonAt(0);
@@ -107,45 +152,14 @@ AlertTestWindow::Test()
 	pBtns[2] = pAlert->ButtonAt(2);
 	
 	BTextView *pTextView = pAlert->TextView();
-	
-	// Window info
-	printf("wi.width = %.1ff;\n"
-		"wi.height = %.1ff;\n"
-		"ati.SetWinInfo(wi);\n",
-		pAlert->Bounds().Width(), pAlert->Bounds().Height());
-		
-	// TextView info
-	printf("\n");
-	which_label(pTextView->Text(), strLabel);
-	pt = pTextView->ConvertToParent(BPoint(0, 0));
-	printf("ti.label = %s;\n"
-		"ti.width = %.1ff;\n"
-		"ti.height = %.1ff;\n"
-		"ti.topleft.Set(%.1ff, %.1ff);\n"
-		"ati.SetTextViewInfo(ti);\n",
-		strLabel.String(), pTextView->Bounds().Width(),
-		pTextView->Bounds().Height(), pt.x, pt.y);
-		
-	// Button info
-	printf("\n");
-	int32 i = 0;
-	while (i < 3 && pBtns[i] != NULL) {
-		BButton *pb = pBtns[i];
-		which_label(pb->Label(), strLabel);
-		pt = pb->ConvertToParent(BPoint(0, 0));
-		printf("bi.label = %s;\n"
-			"bi.width = %.1ff;\n"
-			"bi.height = %.1ff;\n"
-			"bi.topleft.Set(%.1ff, %.1ff);\n"
-			"ati.SetButtonInfo(%d, bi);\n",
-			strLabel.String(), pb->Bounds().Width(),
-			pb->Bounds().Height(), pt.x, pt.y,
-			(int)i);
-		i++;
-	}
 
+	dump_info(pAlert, pBtns, pTextView, strLabel);
+	
 	int32 result = pAlert->Go();
 	printf("%c<Clicked: %d\n", fAlertType, static_cast<int>(result));
+
+	dump_info(pAlert, pBtns, pTextView, strLabel);
+	
 	pAlert = NULL;
 }
 
