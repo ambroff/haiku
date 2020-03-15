@@ -166,7 +166,7 @@ AlertTestInfo::GuiInfoTest()
 	fTest->NextSubTest();
 	CPPUNIT_ASSERT_EQUAL(ui_color(B_PANEL_BACKGROUND_COLOR),
 		masterView->ViewColor());
-	
+
 	// Test all the buttons
 	BButton *btns[3] = { NULL };
 	for (int32 i = 0; i < 3; i++) {
@@ -234,11 +234,14 @@ AlertTestInfo::GuiInfoTest()
 	ASSERT_DEQUAL(0.0f, pt.x);
 	ASSERT_DEQUAL(0.0f, pt.y);
 
-	// Now we can show the alert, hit the default button, and verify that
-	// the proper layout was computed.
+	// Now we can show the alert which will compute the actual layout of the
+	// alert view.
 	fTest->NextSubTest();
-	int32 buttonPressed = pAlert->Go();
-	ASSERT_DEQUAL(0, buttonPressed);
+	int32 buttonPressed = pAlert->Go(new BInvoker(new BMessage(), &app));
+	CPPUNIT_ASSERT_EQUAL(0, buttonPressed);
+
+	bool locked = pAlert->Lock();
+	CPPUNIT_ASSERT_EQUAL(true, locked);
 
 	fTest->NextSubTest();
 	ASSERT_DEQUAL(fWinInfo.width, pAlert->Bounds().Width());
@@ -262,9 +265,6 @@ AlertTestInfo::GuiInfoTest()
 	pt = textView->ConvertToParent(BPoint(0, 0));
 	ASSERT_DEQUAL(fTextInfo.topleft.x, pt.x);
 	ASSERT_DEQUAL(fTextInfo.topleft.y, pt.y);
-	
-	//delete pAlert;
-	pAlert = NULL;	
 }
 
 // Suite
@@ -398,13 +398,13 @@ AlertTest::empty_empty_UW_ES_IA()
 	ti.label = "";
 	ti.width = 276.0f;
 	ti.height = 18.0f;
-	ti.topleft.Set(0.0f, 0.0f);
+	ti.topleft.Set(56.0f, 6.0f);
 	ati.SetTextViewInfo(ti);
 	
 	bi.label = "";
 	bi.width = 75.0f;
 	bi.height = 35.0f;
-	bi.topleft.Set(0.0f, 0.0f);
+	bi.topleft.Set(257.0f, 31.0f);
 	ati.SetButtonInfo(0, bi);
 	
 	ati.SetButtonWidthMode(B_WIDTH_AS_USUAL);
@@ -427,13 +427,13 @@ AlertTest::OK_X_UW_ES_IA()
 	ti.label = "X";
 	ti.width = 276.0f;
 	ti.height = 18.0f;
-	ti.topleft.Set(0.0f, 0.0f);
+	ti.topleft.Set(56.0f, 6.0f);
 	ati.SetTextViewInfo(ti);
 	
 	bi.label = "OK";
 	bi.width = 75.0f;
 	bi.height = 35.0f;
-	bi.topleft.Set(0.0f, 0.0f);
+	bi.topleft.Set(257.0f, 31.0f);
 	ati.SetButtonInfo(0, bi);
 	
 	ati.SetButtonWidthMode(B_WIDTH_AS_USUAL);
@@ -449,20 +449,20 @@ AlertTest::OK_60X_UW_ES_IA()
 	AlertTestInfo ati(this);
 	GuiInfo wi, ti, bi;
 	wi.label = "alert1";
-	wi.width = 310.0f;
-	wi.height = 77.0f;
+	wi.width = 338.0f;
+	wi.height = 90.0f;
 	ati.SetWinInfo(wi);
 	
 	ti.label = k60X;
-	ti.width = 245.0f;
-	ti.height = 26.0f;
-	ti.topleft.Set(55.0f, 6.0f);
+	ti.width = 276.0f;
+	ti.height = 36.0f;
+	ti.topleft.Set(56.0f, 6.0f);
 	ati.SetTextViewInfo(ti);
 	
 	bi.label = "OK";
 	bi.width = 75.0f;
-	bi.height = 30.0f;
-	bi.topleft.Set(229.0f, 41.0f);
+	bi.height = 35.0f;
+	bi.topleft.Set(257.0f, 49.0f);
 	ati.SetButtonInfo(0, bi);
 	
 	ati.SetButtonWidthMode(B_WIDTH_AS_USUAL);
@@ -478,20 +478,20 @@ AlertTest::twentyX_60X_UW_ES_IA()
 	AlertTestInfo ati(this);
 	GuiInfo wi, ti, bi;
 	wi.label = "alert1";
-	wi.width = 310.0f;
-	wi.height = 77.0f;
+	wi.width = 338.0f;
+	wi.height = 90.0f;
 	ati.SetWinInfo(wi);
 	
 	ti.label = k60X;
-	ti.width = 245.0f;
-	ti.height = 26.0f;
-	ti.topleft.Set(55.0f, 6.0f);
+	ti.width = 276.0f;
+	ti.height = 36.0f;
+	ti.topleft.Set(56.0f, 6.0f);
 	ati.SetTextViewInfo(ti);
 	
 	bi.label = k20X;
 	bi.width = 160.0f;
-	bi.height = 30.0f;
-	bi.topleft.Set(144.0f, 41.0f);
+	bi.height = 35.0f;
+	bi.topleft.Set(172.0f, 49.0f);
 	ati.SetButtonInfo(0, bi);
 	
 	ati.SetButtonWidthMode(B_WIDTH_AS_USUAL);
@@ -507,20 +507,21 @@ AlertTest::fortyX_60X_UW_ES_IA()
 	AlertTestInfo ati(this);
 	GuiInfo wi, ti, bi;
 	wi.label = "alert1";
-	wi.width = 365.0f;
-	wi.height = 77.0f;
+	wi.width = 362.0f;
+	wi.height = 90.0f;
 	ati.SetWinInfo(wi);
 	
 	ti.label = k60X;
 	ti.width = 300.0f;
-	ti.height = 26.0f;
-	ti.topleft.Set(55.0f, 6.0f);
+	ti.height = 36.0f;
+
+	ti.topleft.Set(56.0f, 6.0f);
 	ati.SetTextViewInfo(ti);
 	
 	bi.label = k40X;
 	bi.width = 300.0f;
-	bi.height = 30.0f;
-	bi.topleft.Set(59.0f, 41.0f);
+	bi.height = 35.0f;
+	bi.topleft.Set(56.0f, 49.0f);
 	ati.SetButtonInfo(0, bi);
 	
 	ati.SetButtonWidthMode(B_WIDTH_AS_USUAL);
@@ -538,20 +539,20 @@ AlertTest::empty_empty_LW_ES_IA()
 	AlertTestInfo ati(this);
 	GuiInfo wi, ti, bi;
 	wi.label = "alert1";
-	wi.width = 310.0f;
-	wi.height = 64.0f;
+	wi.width = 338.0f;
+	wi.height = 72.0f;
 	ati.SetWinInfo(wi);
 	
 	ti.label = "";
-	ti.width = 245.0f;
-	ti.height = 13.0f;
-	ti.topleft.Set(55.0f, 6.0f);
+	ti.width = 276.0f;
+	ti.height = 18.0f;
+	ti.topleft.Set(56.0f, 6.0f);
 	ati.SetTextViewInfo(ti);
 	
 	bi.label = "";
-	bi.width = 20.0f;
-	bi.height = 30.0f;
-	bi.topleft.Set(284.0f, 28.0f);
+	bi.width = 75.0f;
+	bi.height = 35.0f;
+	bi.topleft.Set(257.0f, 31.0f);
 	ati.SetButtonInfo(0, bi);
 	
 	ati.SetButtonWidthMode(B_WIDTH_FROM_LABEL);
@@ -567,20 +568,20 @@ AlertTest::OK_X_LW_ES_IA()
 	AlertTestInfo ati(this);
 	GuiInfo wi, ti, bi;
 	wi.label = "alert1";
-	wi.width = 310.0f;
-	wi.height = 64.0f;
+	wi.width = 338.0f;
+	wi.height = 72.0f;
 	ati.SetWinInfo(wi);
 	
 	ti.label = "X";
-	ti.width = 245.0f;
-	ti.height = 13.0f;
-	ti.topleft.Set(55.0f, 6.0f);
+	ti.width = 276.0f;
+	ti.height = 18.0f;
+	ti.topleft.Set(56.0f, 6.0f);
 	ati.SetTextViewInfo(ti);
 	
 	bi.label = "OK";
-	bi.width = 35.0f;
-	bi.height = 30.0f;
-	bi.topleft.Set(269.0f, 28.0f);
+	bi.width = 75.0f;
+	bi.height = 35.0f;
+	bi.topleft.Set(257.0f, 31.0f);
 	ati.SetButtonInfo(0, bi);
 	
 	ati.SetButtonWidthMode(B_WIDTH_FROM_LABEL);
@@ -596,20 +597,20 @@ AlertTest::twentyX_60X_LW_ES_IA()
 	AlertTestInfo ati(this);
 	GuiInfo wi, ti, bi;
 	wi.label = "alert1";
-	wi.width = 310.0f;
-	wi.height = 77.0f;
+	wi.width = 338.0f;
+	wi.height = 90.0f;
 	ati.SetWinInfo(wi);
 	
 	ti.label = k60X;
-	ti.width = 245.0f;
-	ti.height = 26.0f;
-	ti.topleft.Set(55.0f, 6.0f);
+	ti.width = 276.0f;
+	ti.height = 36.0f;
+	ti.topleft.Set(56.0f, 6.0f);
 	ati.SetTextViewInfo(ti);
 	
 	bi.label = k20X;
 	bi.width = 160.0f;
-	bi.height = 30.0f;
-	bi.topleft.Set(144.0f, 41.0f);
+	bi.height = 35.0f;
+	bi.topleft.Set(172.0f, 49.0f);
 	ati.SetButtonInfo(0, bi);
 	
 	ati.SetButtonWidthMode(B_WIDTH_FROM_LABEL);
