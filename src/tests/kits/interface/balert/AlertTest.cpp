@@ -1410,30 +1410,30 @@ AlertTest::twentyX_20X_20X_60X_UW_ES_IA()
 	AlertTestInfo ati(this);
 	GuiInfo wi, ti, bi;
 	wi.label = "alert1";
-	wi.width = 563.0f;
-	wi.height = 64.0f;
+	wi.width = 556.0f;
+	wi.height = 72.0f;
 	ati.SetWinInfo(wi);
 	
 	ti.label = k60X;
-	ti.width = 498.0f;
-	ti.height = 13.0f;
-	ti.topleft.Set(55.0f, 6.0f);
+	ti.width = 494.0f;
+	ti.height = 18.0f;
+	ti.topleft.Set(56.0f, 6.0f);
 	ati.SetTextViewInfo(ti);
 	
 	bi.label = k20X;
 	bi.width = 160.0f;
-	bi.height = 24.0f;
-	bi.topleft.Set(62.0f, 31.0f);
+	bi.height = 30.0f;
+	bi.topleft.Set(56.0f, 33.0f);
 	ati.SetButtonInfo(0, bi);
 	bi.label = k20X;
 	bi.width = 160.0f;
-	bi.height = 24.0f;
-	bi.topleft.Set(231.0f, 31.0f);
+	bi.height = 30.0f;
+	bi.topleft.Set(223.0f, 33.0f);
 	ati.SetButtonInfo(1, bi);
 	bi.label = k20X;
 	bi.width = 160.0f;
-	bi.height = 30.0f;
-	bi.topleft.Set(397.0f, 28.0f);
+	bi.height = 35.0f;
+	bi.topleft.Set(390.0f, 31.0f);
 	ati.SetButtonInfo(2, bi);
 	
 	ati.SetButtonWidthMode(B_WIDTH_AS_USUAL);
