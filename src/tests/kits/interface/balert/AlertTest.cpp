@@ -1374,25 +1374,25 @@ AlertTest::twentyX_OK_60X_LW_OS_EA()
 	AlertTestInfo ati(this);
 	GuiInfo wi, ti, bi;
 	wi.label = "alert";
-	wi.width = 310.0f;
-	wi.height = 77.0f;
+	wi.width = 365.0f;
+	wi.height = 90.0f;
 	ati.SetWinInfo(wi);
 	
 	ti.label = k60X;
-	ti.width = 290.0f;
-	ti.height = 26.0f;
-	ti.topleft.Set(10.0f, 6.0f);
+	ti.width = 352.0f;
+	ti.height = 36.0f;
+	ti.topleft.Set(7.0f, 6.0f);
 	ati.SetTextViewInfo(ti);
 	
 	bi.label = k20X;
 	bi.width = 160.0f;
-	bi.height = 24.0f;
-	bi.topleft.Set(10.0f, 44.0f);
+	bi.height = 30.0f;
+	bi.topleft.Set(43.0f, 51.0f);
 	ati.SetButtonInfo(0, bi);
 	bi.label = "OK";
-	bi.width = 35.0f;
-	bi.height = 30.0f;
-	bi.topleft.Set(269.0f, 41.0f);
+	bi.width = 75.0f;
+	bi.height = 35.0f;
+	bi.topleft.Set(284.0f, 49.0f);
 	ati.SetButtonInfo(1, bi);
 
 	ati.SetButtonWidthMode(B_WIDTH_FROM_LABEL);
@@ -1927,30 +1927,30 @@ AlertTest::twentyX_OK_Cancel_60X_UW_OS_EA()
 	AlertTestInfo ati(this);
 	GuiInfo wi, ti, bi;
 	wi.label = "alert1";
-	wi.width = 366.0f;
-	wi.height = 77.0f;
+	wi.width = 411.0f;
+	wi.height = 90.0f;
 	ati.SetWinInfo(wi);
 	
 	ti.label = k60X;
-	ti.width = 346.0f;
-	ti.height = 26.0f;
-	ti.topleft.Set(10.0f, 6.0f);
+	ti.width = 398.0f;
+	ti.height = 36.0f;
+	ti.topleft.Set(7.0f, 6.0f);
 	ati.SetTextViewInfo(ti);
 	
 	bi.label = k20X;
 	bi.width = 160.0f;
-	bi.height = 24.0f;
-	bi.topleft.Set(12.0f, 44.0f);
+	bi.height = 30.0f;
+	bi.topleft.Set(7.0f, 51.0f);
 	ati.SetButtonInfo(0, bi);
 	bi.label = "OK";
 	bi.width = 75.0f;
-	bi.height = 24.0f;
-	bi.topleft.Set(204.0f, 44.0f);
+	bi.height = 30.0f;
+	bi.topleft.Set(248.0f, 51.0f);
 	ati.SetButtonInfo(1, bi);
 	bi.label = "Cancel";
 	bi.width = 75.0f;
-	bi.height = 30.0f;
-	bi.topleft.Set(285.0f, 41.0f);
+	bi.height = 35.0f;
+	bi.topleft.Set(330.0f, 49.0f);
 	ati.SetButtonInfo(2, bi); 
 
 	ati.SetButtonWidthMode(B_WIDTH_AS_USUAL);
