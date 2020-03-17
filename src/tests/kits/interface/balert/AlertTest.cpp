@@ -341,7 +341,7 @@ AlertTest::Suite()
 	
 	////// LW_ES_IA - Three Button //////
 	AT_ADDTEST(empty_empty_empty_X_LW_ES_IA);
-	// AT_ADDTEST(Yes_No_Cancel_X_LW_ES_IA);
+	AT_ADDTEST(Yes_No_Cancel_X_LW_ES_IA);
 	// AT_ADDTEST(twentyX_20X_20X_60X_LW_ES_IA);
 	
 	////// WW_ES_IA - Three Button //////
@@ -1490,30 +1490,30 @@ AlertTest::Yes_No_Cancel_X_LW_ES_IA()
 	AlertTestInfo ati(this);
 	GuiInfo wi, ti, bi;
 	wi.label = "alert1";
-	wi.width = 310.0f;
-	wi.height = 64.0f;
+	wi.width = 338.0f;
+	wi.height = 72.0f;
 	ati.SetWinInfo(wi);
 	
 	ti.label = "X";
-	ti.width = 245.0f;
-	ti.height = 13.0f;
-	ti.topleft.Set(55.0f, 6.0f);
+	ti.width = 276.0f;
+	ti.height = 18.0f;
+	ti.topleft.Set(56.0f, 6.0f);
 	ati.SetTextViewInfo(ti);
 	
 	bi.label = "Yes";
-	bi.width = 37.0f;
-	bi.height = 24.0f;
-	bi.topleft.Set(167.0f, 31.0f);
+	bi.width = 75.0f;
+	bi.height = 30.0f;
+	bi.topleft.Set(93.0f, 33.0f);
 	ati.SetButtonInfo(0, bi);
 	bi.label = "No";
-	bi.width = 33.0f;
-	bi.height = 24.0f;
-	bi.topleft.Set(213.0f, 31.0f);
+	bi.width = 75.0f;
+	bi.height = 30.0f;
+	bi.topleft.Set(175.0f, 33.0f);
 	ati.SetButtonInfo(1, bi);
 	bi.label = "Cancel";
-	bi.width = 52.0f;
+	bi.width = 75.0f;
 	bi.height = 35.0f;
-	bi.topleft.Set(252.0f, 28.0f);
+	bi.topleft.Set(257.0f, 31.0f);
 	ati.SetButtonInfo(2, bi);
 	
 	ati.SetButtonWidthMode(B_WIDTH_FROM_LABEL);
