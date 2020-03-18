@@ -345,7 +345,7 @@ AlertTest::Suite()
 	// AT_ADDTEST(twentyX_20X_20X_60X_LW_ES_IA);
 	
 	////// WW_ES_IA - Three Button //////
-	// AT_ADDTEST(empty_empty_empty_X_WW_ES_IA);
+	AT_ADDTEST(empty_empty_empty_X_WW_ES_IA);
 	// AT_ADDTEST(Monkey_Dog_Cat_X_WW_ES_IA);
 	// AT_ADDTEST(X_20X_X_WW_ES_IA);
 	// AT_ADDTEST(Yes_No_Cancel_X_WW_ES_IA);
@@ -1569,30 +1569,30 @@ AlertTest::empty_empty_empty_X_WW_ES_IA()
 {
 	AlertTestInfo ati(this);
 	GuiInfo wi, ti, bi;
-	wi.width = 310.0f;
-	wi.height = 64.0f;
+	wi.width = 338.0f;
+	wi.height = 72.0f;
 	ati.SetWinInfo(wi);
 	
 	ti.label = "X";
 	ti.width = 276.0f;
-	ti.height = 13.0f;
-	ti.topleft.Set(55.0f, 6.0f);
+	ti.height = 18.0f;
+	ti.topleft.Set(56.0f, 6.0f);
 	ati.SetTextViewInfo(ti);
 	
 	bi.label = "";
-	bi.width = 20.0f;
-	bi.height = 24.0f;
-	bi.topleft.Set(229.0f, 31.0f);
+	bi.width = 75.0f;
+	bi.height = 30.0f;
+	bi.topleft.Set(93.0f, 33.0f);
 	ati.SetButtonInfo(0, bi);
 	bi.label = "";
-	bi.width = 20.0f;
-	bi.height = 24.0f;
-	bi.topleft.Set(258.0f, 31.0f);
+	bi.width = 75.0f;
+	bi.height = 30.0f;
+	bi.topleft.Set(175.0f, 33.0f);
 	ati.SetButtonInfo(1, bi);
 	bi.label = "";
-	bi.width = 20.0f;
-	bi.height = 30.0f;
-	bi.topleft.Set(284.0f, 28.0f);
+	bi.width = 75.0f;
+	bi.height = 35.0f;
+	bi.topleft.Set(257.0f, 31.0f);
 	ati.SetButtonInfo(2, bi); 
 	
 	ati.SetButtonWidthMode(B_WIDTH_FROM_WIDEST);
