@@ -352,10 +352,10 @@ AlertTest::Suite()
 	// AT_ADDTEST(twentyX_20X_20X_60X_WW_ES_IA);
 	
 	////// UW_ES_EA - Three Button //////
-	// AT_ADDTEST(twentyX_20X_20X_60X_UW_ES_EA);
+	AT_ADDTEST(twentyX_20X_20X_60X_UW_ES_EA);
 	
 	////// UW_OS_IA - Three Button //////
-	// AT_ADDTEST(Yes_No_Cancel_60X_UW_OS_IA);
+	AT_ADDTEST(Yes_No_Cancel_60X_UW_OS_IA);
 	
 	////// LW_OS_IA - Three Button //////
 	AT_ADDTEST(Yes_No_Cancel_60X_LW_OS_IA);
@@ -1763,30 +1763,30 @@ AlertTest::twentyX_20X_20X_60X_UW_ES_EA()
 	AlertTestInfo ati(this);
 	GuiInfo wi, ti, bi;
 	wi.label = "alert1";
-	wi.width = 518.0f;
-	wi.height = 64.0f;
+	wi.width = 507.0f;
+	wi.height = 72.0f;
 	ati.SetWinInfo(wi);
 	
 	ti.label = k60X;
-	ti.width = 498.0f;
-	ti.height = 13.0f;
-	ti.topleft.Set(10.0f, 6.0f);
+	ti.width = 494.0f;
+	ti.height = 18.0f;
+	ti.topleft.Set(7.0f, 6.0f);
 	ati.SetTextViewInfo(ti);
 	
 	bi.label = k20X;
 	bi.width = 160.0f;
-	bi.height = 24.0f;
-	bi.topleft.Set(17.0f, 31.0f);
+	bi.height = 30.0f;
+	bi.topleft.Set(7.0f, 33.0f);
 	ati.SetButtonInfo(0, bi);
 	bi.label = k20X;
 	bi.width = 160.0f;
-	bi.height = 24.0f;
-	bi.topleft.Set(186.0f, 31.0f);
+	bi.height = 30.0f;
+	bi.topleft.Set(174.0f, 33.0f);
 	ati.SetButtonInfo(1, bi);
 	bi.label = k20X;
 	bi.width = 160.0f;
-	bi.height = 30.0f;
-	bi.topleft.Set(352.0f, 28.0f);
+	bi.height = 35.0f;
+	bi.topleft.Set(341.0f, 31.0f);
 	ati.SetButtonInfo(2, bi);
 	
 	ati.SetButtonWidthMode(B_WIDTH_AS_USUAL);
@@ -1804,30 +1804,30 @@ AlertTest::Yes_No_Cancel_60X_UW_OS_IA()
 	AlertTestInfo ati(this);
 	GuiInfo wi, ti, bi;
 	wi.label = "alert1";
-	wi.width = 335.0f;
-	wi.height = 77.0f;
+	wi.width = 375.0f;
+	wi.height = 90.0f;
 	ati.SetWinInfo(wi);
 	
 	ti.label = k60X;
-	ti.width = 270.0f;
-	ti.height = 26.0f;
-	ti.topleft.Set(55.0f, 6.0f);
+	ti.width = 313.0f;
+	ti.height = 36.0f;
+	ti.topleft.Set(56.0f, 6.0f);
 	ati.SetTextViewInfo(ti);
 	
 	bi.label = "Yes";
 	bi.width = 75.0f;
-	bi.height = 24.0f;
-	bi.topleft.Set(66.0f, 44.0f);
+	bi.height = 30.0f;
+	bi.topleft.Set(56.0f, 51.0f);
 	ati.SetButtonInfo(0, bi);
 	bi.label = "No";
 	bi.width = 75.0f;
-	bi.height = 24.0f;
-	bi.topleft.Set(173.0f, 44.0f);
+	bi.height = 30.0f;
+	bi.topleft.Set(212.0f, 51.0f);
 	ati.SetButtonInfo(1, bi);
 	bi.label = "Cancel";
 	bi.width = 75.0f;
-	bi.height = 30.0f;
-	bi.topleft.Set(254.0f, 41.0f);
+	bi.height = 35.0f;
+	bi.topleft.Set(294.0f, 49.0f);
 	ati.SetButtonInfo(2, bi); 
 
 	ati.SetButtonWidthMode(B_WIDTH_AS_USUAL);
