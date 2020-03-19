@@ -170,7 +170,7 @@ AlertTestInfo::GuiInfoTest()
 		fTest->NextSubTest();
 		btns[i] = pAlert->ButtonAt(i);
 		
-		if (i >= fButtonCount) {
+		if (i >= fButtonCount || fButtonInfo[i].label[0] == '\0') {
 			// If there is should be no button at this index
 			CPPUNIT_ASSERT_EQUAL((BButton*)NULL, btns[i]);
 		} else {
@@ -250,12 +250,14 @@ AlertTestInfo::GuiInfoTest()
 
 	fTest->NextSubTest();
 	for (int32_t i = 0; i < fButtonCount; ++i) {
-		CPPUNIT_ASSERT(btns[i]->Bounds().Width() > 0.0);
-		CPPUNIT_ASSERT(btns[i]->Bounds().Height() > 0.0);
+		if (btns[i] != NULL) {
+			CPPUNIT_ASSERT(btns[i]->Bounds().Width() > 0.0);
+			CPPUNIT_ASSERT(btns[i]->Bounds().Height() > 0.0);
 
-		BPoint pt = btns[i]->ConvertToParent(BPoint(0, 0));
-		CPPUNIT_ASSERT(pt.x > 0.0);
-		CPPUNIT_ASSERT(pt.y > 0.0);
+			BPoint pt = btns[i]->ConvertToParent(BPoint(0, 0));
+			CPPUNIT_ASSERT(pt.x > 0.0);
+			CPPUNIT_ASSERT(pt.y > 0.0);
+		}
 	}
 
 	fTest->NextSubTest();
