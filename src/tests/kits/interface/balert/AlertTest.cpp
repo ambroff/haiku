@@ -59,6 +59,8 @@ public:
 	void SetButtonWidthMode(button_width widthMode);
 	void SetButtonSpacingMode(button_spacing spacingMode);
 	void SetAlertType(alert_type alertType);
+
+	void SetExpectedInvalid(bool value);
 	
 	void GuiInfoTest();
 
@@ -71,16 +73,17 @@ private:
 	button_width	fWidthMode;
 	button_spacing	fSpacingMode;
 	alert_type		fAlertType;
+	bool			fExpectedInvalid;
 };
 
 AlertTestInfo::AlertTestInfo(AlertTest *pTest)
+	:
+	fTest(pTest),
+	fWidthMode(B_WIDTH_AS_USUAL),
+	fSpacingMode(B_EVEN_SPACING),
+	fAlertType(B_INFO_ALERT),
+	fExpectedInvalid(false)
 {
-	memset(this, 0, sizeof(AlertTestInfo));
-	
-	fTest = pTest;
-	fWidthMode = B_WIDTH_AS_USUAL;
-	fSpacingMode = B_EVEN_SPACING;
-	fAlertType = B_INFO_ALERT;
 }
 
 AlertTestInfo::~AlertTestInfo()
@@ -130,7 +133,13 @@ AlertTestInfo::SetAlertType(alert_type alertType)
 {
 	fAlertType = alertType;
 }
-	
+
+void
+AlertTestInfo::SetExpectedInvalid(bool value)
+{
+	fExpectedInvalid = value;
+}
+
 void
 AlertTestInfo::GuiInfoTest()
 {
