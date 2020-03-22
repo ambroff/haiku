@@ -60,19 +60,22 @@ operator<(const FakeMessenger& a, const FakeMessenger& b)
 	return a.fPreferredTarget < b.fPreferredTarget;
 }
 
-static
-bool
-operator!=(const FakeMessenger& a, const FakeMessenger& b)
-{
-	return (a < b || b < a);
-}
 
 static
 bool
 operator==(const FakeMessenger& a, const FakeMessenger& b)
 {
-	return !(a != b);
+	return a.fPort == b.fPort && a.fHandlerToken == b.fHandlerToken;
 }
+
+
+static
+bool
+operator!=(const FakeMessenger& a, const FakeMessenger& b)
+{
+	return !(a == b);
+}
+
 
 // constructor
 MessengerComparissonTester::MessengerComparissonTester()
