@@ -51,11 +51,13 @@ operator<(const FakeMessenger& a, const FakeMessenger& b)
 	// * fHandlerToken
 	// * fPreferredTarget
 	// fTeam is insignificant
-	return (a.fPort < b.fPort
-			|| a.fPort == b.fPort
-				&& (a.fHandlerToken < b.fHandlerToken
-					|| a.fHandlerToken == b.fHandlerToken
-						&& !a.fPreferredTarget && b.fPreferredTarget));
+	if (a.fPort < b.fPort)
+		return true;
+
+	if (a.fHandlerToken < b.fHandlerToken)
+		return true;
+
+	return a.fPreferredTarget < b.fPreferredTarget;
 }
 
 static
@@ -303,8 +305,6 @@ void MessengerComparissonTester::LessTest1()
 
 Test* MessengerComparissonTester::Suite()
 {
-	typedef BThreadedTestCaller<MessengerComparissonTester> TC;
-
 	TestSuite* testSuite = new TestSuite;
 
 	ADD_TEST4(BMessenger, testSuite, MessengerComparissonTester, ComparissonTest1);

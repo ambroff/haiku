@@ -254,8 +254,13 @@ BMessenger::operator=(const BMessenger& other)
 bool
 BMessenger::operator==(const BMessenger& other) const
 {
+	BMessenger::Private self(const_cast<BMessenger&>(*this));
+	BMessenger::Private rhs(const_cast<BMessenger&>(other));
+
 	// Note: The fTeam fields are not compared.
-	return fPort == other.fPort && fHandlerToken == other.fHandlerToken;
+	return fPort == other.fPort
+		&& fHandlerToken == other.fHandlerToken
+		&& self.IsPreferredTarget() == rhs.IsPreferredTarget();
 }
 
 
