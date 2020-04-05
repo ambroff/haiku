@@ -40,6 +40,12 @@ struct FakeMessenger {
 	bool	extra2;
 	bool	extra3;
 	bool	extra4;
+
+	friend std::ostream& operator<<(std::ostream& out, const FakeMessenger& f)
+	{
+		out << "{" << f.fPort << ", " << f.fHandlerToken << ", " << f.fTeam << ", " << f.fPreferredTarget << "}";
+		return out;
+	}
 };
 
 static
@@ -57,7 +63,7 @@ operator<(const FakeMessenger& a, const FakeMessenger& b)
 	if (a.fHandlerToken < b.fHandlerToken)
 		return true;
 
-	return a.fPreferredTarget < b.fPreferredTarget;
+	return (a.fHandlerToken == -2) < (b.fPreferredTarget == -2);
 }
 
 
@@ -242,9 +248,18 @@ void
 Compare(const FakeMessenger &fake1, const FakeMessenger &fake2,
 		const BMessenger &messenger1, const BMessenger &messenger2)
 {
-	CHK((messenger1 == messenger2) == (fake1 == fake2));
-	CHK((messenger1 != messenger2) == (fake1 != fake2));
-	CHK((messenger1 < messenger2) == (fake1 < fake2));
+	if (((messenger1 == messenger2) != (fake1 == fake2))
+		|| ((messenger1 != messenger2) != (fake1 != fake2))
+		|| ((messenger1 < messenger2) != (fake1 < fake2)))
+	{
+		fprintf(stderr, "KWA: A %d==%d\n", (messenger1 == messenger2), (fake1 == fake2));
+		fprintf(stderr, "KWA: B %d==%d\n", (messenger1 != messenger2), (fake1 != fake2));
+		fprintf(stderr, "KWA: C %d==%d\n", (messenger1 < messenger2), (fake1 < fake2));
+		exit(1);
+	}
+	// CHK((messenger1 == messenger2) == (fake1 == fake2));
+	// CHK((messenger1 != messenger2) == (fake1 != fake2));
+	// CHK((messenger1 < messenger2) == (fake1 < fake2));
 }
 
 /*
@@ -291,6 +306,9 @@ void MessengerComparissonTester::LessTest1()
 									fake2.fHandlerToken = token2;
 									fake2.fTeam = team2;
 									fake2.fPreferredTarget = preferred2;
+									std::cerr << "KWA: comparing "
+											  << fake1 << " with "
+											  << fake2 << std::endl;
 									BMessenger &messenger2
 										= *(BMessenger*)&fake2;
 									Compare(fake1, fake2, messenger1,
@@ -310,9 +328,9 @@ Test* MessengerComparissonTester::Suite()
 {
 	TestSuite* testSuite = new TestSuite;
 
-	ADD_TEST4(BMessenger, testSuite, MessengerComparissonTester, ComparissonTest1);
-	ADD_TEST4(BMessenger, testSuite, MessengerComparissonTester, ComparissonTest2);
-	ADD_TEST4(BMessenger, testSuite, MessengerComparissonTester, ComparissonTest3);
+	// ADD_TEST4(BMessenger, testSuite, MessengerComparissonTester, ComparissonTest1);
+	// ADD_TEST4(BMessenger, testSuite, MessengerComparissonTester, ComparissonTest2);
+	// ADD_TEST4(BMessenger, testSuite, MessengerComparissonTester, ComparissonTest3);
 	ADD_TEST4(BMessenger, testSuite, MessengerComparissonTester, LessTest1);
 
 	return testSuite;
