@@ -43,6 +43,7 @@
 //	- RFC 813 - Window and Acknowledgement Strategy in TCP
 //	- RFC 1337 - TIME_WAIT Assassination Hazards in TCP
 //
+// FIXME: Revisit these notes, they appear to no longer be accurate.
 // Things this implementation currently doesn't implement:
 //	- TCP Slow Start, Congestion Avoidance, Fast Retransmit, and Fast Recovery,
 //	  RFC 2001, RFC 2581, RFC 3042
