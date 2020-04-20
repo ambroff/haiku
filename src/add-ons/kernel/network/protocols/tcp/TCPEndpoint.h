@@ -110,6 +110,8 @@ private:
 			void		_ResetSlowStart();
 			void		_DuplicateAcknowledge(tcp_segment_header& segment);
 
+	static	void		_LowMemoryHandler(void* data, uint32 resources, int32 level);
+
 	static	void		_TimeWaitTimer(net_timer* timer, void* _endpoint);
 	static	void		_RetransmitTimer(net_timer* timer, void* _endpoint);
 	static	void		_PersistTimer(net_timer* timer, void* _endpoint);
@@ -120,6 +122,8 @@ private:
 							MutexLocker& locker, bigtime_t timeout);
 
 private:
+	status_t		fInitStatus;
+
 	TCPEndpoint*	fConnectionHashLink;
 	TCPEndpoint*	fEndpointHashLink;
 	friend class	EndpointManager;

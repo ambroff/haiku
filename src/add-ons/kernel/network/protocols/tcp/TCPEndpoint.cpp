@@ -33,6 +33,7 @@
 #include <tracing.h>
 #include <util/AutoLock.h>
 #include <util/list.h>
+#include <low_resource_manager.h>
 
 #include "EndpointManager.h"
 
@@ -441,7 +442,7 @@ TCPEndpoint::TCPEndpoint(net_socket* socket)
 	fReceiveMaxAdvertised(0),
 	fReceiveWindow(socket->receive.buffer_size),
 	fReceiveMaxSegmentSize(TCP_DEFAULT_MAX_SEGMENT_SIZE),
-	fReceiveQueue(socket->receive.buffer_size),
+	fReceiveQueue(0xffff << 14),
 	fSmoothedRoundTripTime(0),
 	fRoundTripVariation(0),
 	fSendTime(0),
@@ -466,6 +467,12 @@ TCPEndpoint::TCPEndpoint(net_socket* socket)
 		TCPEndpoint::_DelayedAcknowledgeTimer, this);
 	gStackModule->init_timer(&fTimeWaitTimer, TCPEndpoint::_TimeWaitTimer,
 		this);
+
+	fInitStatus = register_low_resource_handler(
+		&TCPEndpoint::_LowMemoryHandler,
+		this,
+		B_KERNEL_RESOURCE_PAGES | B_KERNEL_RESOURCE_MEMORY | B_KERNEL_RESOURCE_ADDRESS_SPACE,
+		0);
 
 	T(APICall(this, "constructor"));
 }
@@ -495,13 +502,15 @@ TCPEndpoint::~TCPEndpoint()
 	gStackModule->wait_for_timer(&fTimeWaitTimer);
 
 	gDatalinkModule->put_route(Domain(), fRoute);
+
+	unregister_low_resource_handler(&TCPEndpoint::_LowMemoryHandler, this);
 }
 
 
 status_t
 TCPEndpoint::InitCheck() const
 {
-	return B_OK;
+	return fInitStatus;
 }
 
 
@@ -1318,6 +1327,16 @@ TCPEndpoint::_DuplicateAcknowledge(tcp_segment_header &segment)
 	}
 }
 
+// FIXME: This is probably not the way to do this.
+// If we have a memory starved server with tens of thousands of TCP connections, we don't want to
+// have to invoke this callback for every single connection. We should instead have a single
+// callback which influences the advertised window shift factor and that's all. Maybe.
+void
+TCPEndpoint::_LowMemoryHandler(void* data, uint32 resources, int32 level)
+{
+	// See block_cache::_LowMemoryHandler for an example.
+	TRACE("Low memory handler called with level %" B_PRId32 "\n", level);
+}
 
 void
 TCPEndpoint::_UpdateTimestamps(tcp_segment_header& segment,
@@ -2257,11 +2276,11 @@ TCPEndpoint::_PrepareSendPath(const sockaddr* peer)
 
 	// Compute the window shift we advertise to our peer - if it doesn't support
 	// this option, this will be reset to 0 (when its SYN is received)
-	fReceiveWindowShift = 0;
-	while (fReceiveWindowShift < TCP_MAX_WINDOW_SHIFT
-		&& (0xffffUL << fReceiveWindowShift) < socket->receive.buffer_size) {
-		fReceiveWindowShift++;
-	}
+	// while (fReceiveWindowShift < TCP_MAX_WINDOW_SHIFT
+	// 	&& (0xffffUL << fReceiveWindowShift) < socket->receive.buffer_size) {
+	// 	fReceiveWindowShift++;
+	// }
+	fReceiveWindowShift = 14;
 
 	return B_OK;
 }
