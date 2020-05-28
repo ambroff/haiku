@@ -549,10 +549,14 @@ BSecureSocket::Read(void* buffer, size_t size)
 		bytesRead = SSL_read(fPrivate->fSSL, buffer, size);
 		if (bytesRead >= 0)
 			return bytesRead;
+
 		// Don't retry in cases of "no data available" for non-blocking sockets
-		int error = SSL_get_error(fPrivate->fSSL, bytesRead);
-		if (error == SSL_ERROR_WANT_READ || error == SSL_ERROR_WANT_WRITE)
-			return B_WOULD_BLOCK;
+		if (errno != EINTR) {
+			int error = SSL_get_error(fPrivate->fSSL, bytesRead);
+			if (error == SSL_ERROR_WANT_READ || error == SSL_ERROR_WANT_WRITE)
+				return B_WOULD_BLOCK;
+		}
+
 		// Otherwise, check if we should retry (maybe we were interrupted by
 		// a signal, for example)
 		retry = BIO_should_retry(SSL_get_rbio(fPrivate->fSSL));
@@ -568,9 +572,26 @@ BSecureSocket::Write(const void* buffer, size_t size)
 	if (!IsConnected())
 		return B_ERROR;
 
-	int bytesWritten = SSL_write(fPrivate->fSSL, buffer, size);
-	if (bytesWritten >= 0)
-		return bytesWritten;
+	int bytesWritten;
+	int retry;
+	do {
+		bytesWritten = SSL_write(fPrivate->fSSL, buffer, size);
+		if (bytesWritten >= 0)
+			return bytesWritten;
+
+		// Don't retry in cases of "no data available" for non-blocking
+		// sockets
+		if (errno != EINTR) {
+			int error = SSL_get_error(fPrivate->fSSL, bytesWritten);
+			if (error == SSL_ERROR_WANT_READ ||
+				error == SSL_ERROR_WANT_WRITE)
+				return B_WOULD_BLOCK;
+		}
+
+		// Otherwise, check if we should retry (maybe we were
+		// interrupted by a signal, for example)
+		retry = BIO_should_retry(SSL_get_wbio(fPrivate->fSSL));
+	} while (retry != 0);
 
 	return fPrivate->ErrorCode(bytesWritten);
 }
