@@ -636,12 +636,15 @@ BSecureSocket::_SetupConnect(const char* host)
 	if (error != B_OK)
 		return error;
 
-	int returnValue = SSL_connect(fPrivate->fSSL);
-	if (returnValue <= 0) {
-		TRACE("SSLConnection can't connect\n");
-		BSocket::Disconnect();
-		return fPrivate->ErrorCode(returnValue);
-	}
+	int returnValue;
+	int retry;
+	do {
+		returnValue = SSL_connect(fPrivate->fSSL);
+		if (returnValue > 0)
+			return B_OK;
+
+		retry = BIO_should_retry(SSL_get_rbio(fPrivate->fSSL));
+	} while (retry != 0);
 
 #ifdef TRACE_SESSION_KEY
 	fprintf(stderr, "SSL SESSION INFO:\n");
@@ -651,7 +654,9 @@ BSecureSocket::_SetupConnect(const char* host)
 	fprintf(stderr, "\n");
 #endif
 
-	return B_OK;
+	TRACE("SSLConnection can't connect\n");
+	BSocket::Disconnect();
+	return fPrivate->ErrorCode(returnValue);
 }
 
 

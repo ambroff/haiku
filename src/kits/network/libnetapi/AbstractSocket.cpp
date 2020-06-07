@@ -231,7 +231,13 @@ BAbstractSocket::Connect(const BNetworkAddress& peer, int type,
 		return fInitStatus;
 
 	BNetworkAddress normalized = peer;
-	if (connect(fSocket, normalized, normalized.Length()) != 0) {
+
+	int connectResult;
+	do {
+		connectResult = connect(fSocket, normalized, normalized.Length());	   
+	} while (connectResult != 0 && errno == EINTR);
+
+	if (connectResult != 0 && errno != EALREADY) {
 		TRACE("%p: connecting to %s: %s\n", this,
 			normalized.ToString().c_str(), strerror(errno));
 		return fInitStatus = errno;
