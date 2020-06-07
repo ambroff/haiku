@@ -149,6 +149,7 @@ public:
 
 		std::vector<std::string> serverArgs;
 		serverArgs.push_back("openssl");
+		serverArgs.push_back("s_server");
 		serverArgs.push_back("-accept");
 		serverArgs.push_back(to_string(fServerPort));
 		serverArgs.push_back("-key");
@@ -186,13 +187,13 @@ void SecureSocketTest::InterruptedSyscallTest()
 		B_NORMAL_PRIORITY, NULL);
 	resume_thread(signalSenderThread);
 
+	snooze(1000000);
+
 	// Connect to the server
 	BSecureSocket clientSocket;
 	{
-		std::string address("127.0.0.1:" + to_string(server.Port()));
-
-		BNetworkAddress serverAddress;
-		serverAddress.SetTo(address.c_str());
+		BNetworkAddress serverAddress("127.0.0.1", server.Port());
+		CPPUNIT_ASSERT_EQUAL(B_OK, serverAddress.InitCheck());
 
 		status_t connectResult = clientSocket.Connect(serverAddress);
 		CPPUNIT_ASSERT_EQUAL(B_OK, connectResult);
