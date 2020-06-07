@@ -234,7 +234,7 @@ BAbstractSocket::Connect(const BNetworkAddress& peer, int type,
 
 	int connectResult;
 	do {
-		connectResult = connect(fSocket, normalized, normalized.Length());	   
+		connectResult = connect(fSocket, normalized, normalized.Length());
 	} while (connectResult != 0 && errno == EINTR);
 
 	if (connectResult != 0 && errno != EALREADY) {
