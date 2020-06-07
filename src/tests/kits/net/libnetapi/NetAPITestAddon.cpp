@@ -10,6 +10,7 @@
 #include "NetworkAddressTest.h"
 #include "NetworkInterfaceTest.h"
 #include "NetworkUrlTest.h"
+#include "SecureSocketTest.h"
 
 
 BTestSuite*
@@ -20,6 +21,7 @@ getTestSuite()
 	NetworkAddressTest::AddTests(*suite);
 	NetworkInterfaceTest::AddTests(*suite);
 	NetworkUrlTest::AddTests(*suite);
+	SecureSocketTest::AddTests(*suite);
 
 	return suite;
 }
