@@ -23,6 +23,16 @@ namespace {
 int32 stop;
 
 
+class UncheckedSecureSocket : public BSecureSocket {
+public:
+	virtual bool CertificateVerificationFailed(BCertificate& certificate,
+		const char* message)
+	{
+		return true;
+	}
+};
+
+
 template <typename T>
 std::string to_string(T value)
 {
@@ -35,7 +45,7 @@ std::string to_string(T value)
 int32 send_signal_repeatedly(void*)
 {
 	while (atomic_get(&stop) != 1) {
-		//raise(SIGWINCH);
+		raise(SIGWINCH);
 	}
 
 	return 0;
@@ -156,7 +166,9 @@ public:
 		serverArgs.push_back(keyPath);
 		serverArgs.push_back("-cert");
 		serverArgs.push_back(certPath);
-		
+		serverArgs.push_back("-quiet");
+		serverArgs.push_back("-www");
+
 		fChildProcess = new ChildProcess;
 		return fChildProcess->Start(serverArgs);
 	}
@@ -184,28 +196,36 @@ void SecureSocketTest::InterruptedSyscallTest()
 	// process over and over again.
 	atomic_set(&stop, 0);
 	thread_id signalSenderThread = spawn_thread(send_signal_repeatedly, "",
-		B_NORMAL_PRIORITY, NULL);
+		B_URGENT_PRIORITY, NULL);
 	resume_thread(signalSenderThread);
-
-	snooze(1000000);
+	snooze(10000);
 
 	// Connect to the server
-	BSecureSocket clientSocket;
+	UncheckedSecureSocket clientSocket;
 	{
 		BNetworkAddress serverAddress("127.0.0.1", server.Port());
 		CPPUNIT_ASSERT_EQUAL(B_OK, serverAddress.InitCheck());
 
+		// TODO: The server might not be up yet, so try to connect in a tight
+		// loop instead of sleeping.
+		snooze(100000);
 		status_t connectResult = clientSocket.Connect(serverAddress);
 		CPPUNIT_ASSERT_EQUAL(B_OK, connectResult);
 	}
 
-	// Write a line of data
-	{
-	}
+	// Write a request line
+	std::string request("GET /\r\n");
+	CPPUNIT_ASSERT_EQUAL(request.length(),
+		clientSocket.Write(request.c_str(), request.length()));
 
-	// Read back the same line, which the server should have echoed back to us.
-	{
-	}
+	// Read the status line from the response.
+	std::string expectedResponse("HTTP/1.0 200 ok");
+	char responseBuf[256];
+	CPPUNIT_ASSERT_EQUAL(expectedResponse.length(),
+		clientSocket.Read(responseBuf, expectedResponse.length()));
+	responseBuf[expectedResponse.length()] = '\0';
+	std::string actualResponse(responseBuf, expectedResponse.length());
+	CPPUNIT_ASSERT_EQUAL(expectedResponse, actualResponse);
 
 	// Tests are complete, stop signal sender thread.
 	atomic_set(&stop, 1);
