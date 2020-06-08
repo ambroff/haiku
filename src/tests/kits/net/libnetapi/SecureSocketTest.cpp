@@ -198,40 +198,49 @@ void SecureSocketTest::InterruptedSyscallTest()
 	thread_id signalSenderThread = spawn_thread(send_signal_repeatedly, "",
 		B_URGENT_PRIORITY, NULL);
 	resume_thread(signalSenderThread);
-	snooze(10000);
+	snooze(100000);
 
-	// Connect to the server
-	UncheckedSecureSocket clientSocket;
-	{
-		BNetworkAddress serverAddress("127.0.0.1", server.Port());
-		CPPUNIT_ASSERT_EQUAL(B_OK, serverAddress.InitCheck());
+	BNetworkAddress serverAddress("127.0.0.1", server.Port());
+	CPPUNIT_ASSERT_EQUAL(B_OK, serverAddress.InitCheck());
 
-		// TODO: The server might not be up yet, so try to connect in a tight
-		// loop instead of sleeping.
-		snooze(100000);
-		status_t connectResult = clientSocket.Connect(serverAddress);
-		CPPUNIT_ASSERT_EQUAL(B_OK, connectResult);
+	for (int i = 0; i < 1; ++i) {
+		// Connect to the server
+		UncheckedSecureSocket clientSocket;
+		{
+			// TODO: The server might not be up yet, so try to connect in a
+			// tight loop.
+			status_t connectResult = clientSocket.Connect(serverAddress);
+			CPPUNIT_ASSERT_EQUAL(B_OK, connectResult);
+		}
+
+		// Write a request line
+		std::string request("GET /\r\n");
+		CPPUNIT_ASSERT_EQUAL(request.length(),
+			clientSocket.Write(request.c_str(), request.length()));
+
+		// Read the status line from the response.
+		std::string expectedResponse("HTTP/1.0 200 OK");
+		char responseBuf[256];
+		CPPUNIT_ASSERT_EQUAL(expectedResponse.length(),
+			clientSocket.Read(responseBuf, expectedResponse.length()));
+		responseBuf[expectedResponse.length()] = '\0';
+		std::string actualResponse(responseBuf, expectedResponse.length());
+		CPPUNIT_ASSERT_EQUAL(expectedResponse, actualResponse);
+
+		// Read the rest of the response. We don't really care what it is, but
+		// we want to introduce more chances for an interrupted system call.
+		ssize_t bytesRead;
+		do {
+			bytesRead = clientSocket.Read(responseBuf, sizeof(responseBuf));
+		} while (bytesRead > 0);
+		CPPUNIT_ASSERT_EQUAL(0, bytesRead);
+
+		// Tests are complete, stop signal sender thread.
+		atomic_set(&stop, 1);
+		status_t threadStatus;
+		wait_for_thread(signalSenderThread, &threadStatus);
+		CPPUNIT_ASSERT_EQUAL(threadStatus, B_OK);
 	}
-
-	// Write a request line
-	std::string request("GET /\r\n");
-	CPPUNIT_ASSERT_EQUAL(request.length(),
-		clientSocket.Write(request.c_str(), request.length()));
-
-	// Read the status line from the response.
-	std::string expectedResponse("HTTP/1.0 200 ok");
-	char responseBuf[256];
-	CPPUNIT_ASSERT_EQUAL(expectedResponse.length(),
-		clientSocket.Read(responseBuf, expectedResponse.length()));
-	responseBuf[expectedResponse.length()] = '\0';
-	std::string actualResponse(responseBuf, expectedResponse.length());
-	CPPUNIT_ASSERT_EQUAL(expectedResponse, actualResponse);
-
-	// Tests are complete, stop signal sender thread.
-	atomic_set(&stop, 1);
-	status_t threadStatus;
-	wait_for_thread(signalSenderThread, &threadStatus);
-	CPPUNIT_ASSERT_EQUAL(threadStatus, B_OK);
 }
 
 
