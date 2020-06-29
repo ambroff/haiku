@@ -1783,7 +1783,7 @@ EntryTest::MoveToTest()
 	// file
 	// same dir
 	MoveToTestFile(&file2, file2.super, NULL, false, false, B_FILE_EXISTS);
-	MoveToTestFile(&file2, file2.super, NULL, false, true, B_NOT_ALLOWED);
+	MoveToTestFile(&file2, file2.super, NULL, false, true, B_BAD_VALUE);
 	// different dir
 	MoveToTestFile(&file2, &dir2, NULL, false, false, B_OK);
 	// different dir, existing file, clobber
@@ -1793,7 +1793,7 @@ EntryTest::MoveToTest()
 	// dir
 	// same dir
 	MoveToTestDir(&file2, file2.super, NULL, false, false, B_FILE_EXISTS);
-	MoveToTestDir(&file2, file2.super, NULL, false, true, B_NOT_ALLOWED);
+	MoveToTestDir(&file2, file2.super, NULL, false, true, B_BAD_VALUE);
 	// different dir
 	MoveToTestDir(&file2, &dir2, NULL, false, false, B_OK);
 	// different dir, existing file, clobber
@@ -1803,7 +1803,7 @@ EntryTest::MoveToTest()
 	// link
 	// same dir
 	MoveToTestLink(&file2, file2.super, NULL, false, false, B_FILE_EXISTS);
-	MoveToTestLink(&file2, file2.super, NULL, false, true, B_NOT_ALLOWED);
+	MoveToTestLink(&file2, file2.super, NULL, false, true, B_BAD_VALUE);
 	// different dir
 	MoveToTestLink(&file2, &dir2, NULL, false, false, B_OK);
 	// different dir, existing file, clobber
@@ -1817,7 +1817,7 @@ EntryTest::MoveToTest()
 	MoveToTestFile(&file2, file2.super, &file2, false, false,
 				   B_FILE_EXISTS);
 	MoveToTestFile(&file2, file2.super, &file2, false, true,
-				   B_NOT_ALLOWED);
+				   B_BAD_VALUE);
 	MoveToTestFile(&file2, file2.super, &file3, false, false, B_OK);
 	// different dir
 	MoveToTestFile(&file2, &dir2, &file3, false, false, B_OK);
@@ -1830,7 +1830,7 @@ EntryTest::MoveToTest()
 	MoveToTestDir(&file2, file2.super, &file2, false, false,
 				  B_FILE_EXISTS);
 	MoveToTestDir(&file2, file2.super, &file2, false, true,
-				  B_NOT_ALLOWED);
+				  B_BAD_VALUE);
 	MoveToTestDir(&file2, file2.super, &file3, false, false, B_OK);
 	// different dir
 	MoveToTestDir(&file2, &dir2, &file3, false, false, B_OK);
@@ -1843,7 +1843,7 @@ EntryTest::MoveToTest()
 	MoveToTestLink(&file2, file2.super, &file2, false, false,
 				   B_FILE_EXISTS);
 	MoveToTestLink(&file2, file2.super, &file2, false, true,
-				   B_NOT_ALLOWED);
+				   B_BAD_VALUE);
 	MoveToTestLink(&file2, file2.super, &file3, false, false, B_OK);
 	// different dir
 	MoveToTestLink(&file2, &dir2, &file3, false, false, B_OK);
@@ -1856,10 +1856,10 @@ EntryTest::MoveToTest()
 	CreateFile(file3.cpath);
 	CPPUNIT_ASSERT( entry.SetTo(file3.cpath) == B_OK );
 	CPPUNIT_ASSERT( dir.SetTo(dir1.super->cpath) == B_OK );
-	CPPUNIT_ASSERT( entry.MoveTo(&dir, dir1.cname, true)
-					== B_DIRECTORY_NOT_EMPTY );
+	CPPUNIT_ASSERT_EQUAL(entry.MoveTo(&dir, dir1.cname, true),
+		B_IS_A_DIRECTORY);
 	CPPUNIT_ASSERT( PingDir(dir1.cpath) );
-	CPPUNIT_ASSERT( PingFile(file3.cpath, &entry) );
+	CPPUNIT_ASSERT(PingFile(file3.cpath, &entry));
 	RemoveFile(file3.cpath);
 	entry.Unset();
 	dir.Unset();
@@ -1867,9 +1867,10 @@ EntryTest::MoveToTest()
 	CreateFile(file3.cpath);
 	CPPUNIT_ASSERT( entry.SetTo(file3.cpath) == B_OK );
 	CPPUNIT_ASSERT( dir.SetTo(subDir1.super->cpath) == B_OK );
-	CPPUNIT_ASSERT( entry.MoveTo(&dir, subDir1.cname, true) == B_OK );
-	CPPUNIT_ASSERT( PingFile(subDir1.cpath, &entry) );
-	CPPUNIT_ASSERT( !PingFile(file3.cpath) );
+	CPPUNIT_ASSERT_EQUAL(entry.MoveTo(&dir, subDir1.cname, true),
+		B_IS_A_DIRECTORY);
+	CPPUNIT_ASSERT(!PingFile(subDir1.cpath, &entry));
+	CPPUNIT_ASSERT(PingFile(file3.cpath));
 	RemoveFile(subDir1.cpath);
 	entry.Unset();
 	dir.Unset();
@@ -1891,16 +1892,13 @@ EntryTest::MoveToTest()
 	CPPUNIT_ASSERT( entry.MoveTo(&dir) == B_NO_INIT );
 	entry.Unset();
 	dir.Unset();
-	// bad args (NULL dir)
-// R5: crashs
-#if !TEST_R5
+	// bad args (NULL dir). Note: R5 crashes with NULL dir argument.
 	CreateFile(file2.cpath);
 	CPPUNIT_ASSERT( entry.SetTo(file2.cpath) == B_OK );
 	CPPUNIT_ASSERT( entry.MoveTo(NULL, file3.cpath) == B_BAD_VALUE );
 	RemoveFile(file3.cpath);
 	entry.Unset();
 	dir.Unset();
-#endif
 	// uninitialized dir, absolute path
 	CreateFile(file2.cpath);
 	CPPUNIT_ASSERT( entry.SetTo(file2.cpath) == B_OK );
@@ -2295,6 +2293,14 @@ bool
 EntryTest::PingFile(const char *path, BEntry *entry)
 {
 	bool result = false;
+
+	// path might not be the absolute path, but entry.Path() will return the
+	// normalized path. So we need to create this to get the absolute path
+	// for comparison.
+	BPath expectedPath(path, NULL, true);
+	if (expectedPath.InitCheck() != B_OK)
+		return result;
+
 	// check existence and type
 	struct stat st;
 	if (lstat(path, &st) == 0)
@@ -2302,7 +2308,8 @@ EntryTest::PingFile(const char *path, BEntry *entry)
 	// check entry
 	if (result && entry) {
 		BPath entryPath;
-		result = (entry->GetPath(&entryPath) == B_OK && entryPath == path);
+		result = (entry->GetPath(&entryPath) == B_OK
+			&& entryPath == expectedPath);
 	}
 	return result;
 }
