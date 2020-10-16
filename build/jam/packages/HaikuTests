@@ -1,0 +1,12 @@
+# if [ FIsBuildFeatureEnabled tests ] {
+
+local architecture = $(HAIKU_PACKAGING_ARCHS[1]) ;
+
+local haikuTestsPackage = haiku_tests.hpkg ;
+HaikuPackage $(haikuTestsPackage) ;
+
+CopyDirectoryToPackage tests
+	: $(HAIKU_BUILD_DIR) tests haiku $(architecture) haiku unittests
+        : tests ;
+
+# }
