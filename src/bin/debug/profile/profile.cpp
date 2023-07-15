@@ -35,6 +35,7 @@
 
 #include "BasicProfileResult.h"
 #include "CallgrindProfileResult.h"
+#include "PerfScriptProfileResult.h"
 #include "debug_utils.h"
 #include "Image.h"
 #include "Options.h"
@@ -413,6 +414,8 @@ private:
 
 		if (gOptions.callgrind_directory != NULL)
 			profileResult = new(std::nothrow) CallgrindProfileResult;
+		else if (gOptions.perf_script_output)
+			profileResult = new(std::nothrow) PerfScriptProfileResult;
 		else if (gOptions.analyze_full_stack)
 			profileResult = new(std::nothrow) InclusiveProfileResult;
 		else
@@ -1062,6 +1065,11 @@ main(int argc, const char* const* argv)
 				gOptions.callgrind_directory = optarg;
 				gOptions.analyze_full_stack = true;
 				gOptions.stack_depth = 64;
+				break;
+			case 'p':
+				gOptions.perf_script_output = true;
+				gOptions.analyze_full_stack = true;
+				gOptions.stack_depth = 128;
 				break;
 			default:
 				print_usage_and_exit(true);

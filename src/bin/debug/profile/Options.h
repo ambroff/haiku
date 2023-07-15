@@ -24,7 +24,8 @@ struct Options {
 		profile_teams(true),
 		profile_threads(true),
 		analyze_full_stack(false),
-		summary_result(false)
+		summary_result(false),
+		perf_script_output(false)
 	{
 	}
 
@@ -39,6 +40,7 @@ struct Options {
 	bool		profile_threads;
 	bool		analyze_full_stack;
 	bool		summary_result;
+	bool        perf_script_output;
 };
 
 

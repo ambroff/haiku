@@ -13,6 +13,7 @@ BinCommand profile
 	BasicProfileResult.cpp
 	CallgrindProfileResult.cpp
 	Image.cpp
+	PerfScriptProfileResult.cpp
 	ProfiledEntity.cpp
 	ProfileResult.cpp
 	SharedImage.cpp
