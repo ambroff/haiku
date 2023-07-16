@@ -93,6 +93,7 @@ static const char* kUsage =
 	"                   produce a combined output at the end.\n"
 	"  -v <directory> - Create valgrind/callgrind output. <directory> is the\n"
 	"                   directory where to put the output files.\n"
+	"  -p             - Output compatible with profiler.firefox.com\n"
 ;
 
 
@@ -1018,7 +1019,7 @@ main(int argc, const char* const* argv)
 		};
 
 		opterr = 0; // don't print errors
-		int c = getopt_long(argc, (char**)argv, "+acCfhi:klo:rs:Sv:",
+		int c = getopt_long(argc, (char**)argv, "+acCfhip:klo:rs:Sv:",
 			sLongOptions, NULL);
 		if (c == -1)
 			break;
