@@ -63,6 +63,7 @@ const static struct type_map {
 	{{0x024DEE41, 0x33E7, 0x11D3, 0x9D690008C781F39FLL}, "MBR partition nest"},
 	// Haiku partition
 	{{0x42465331, 0x3BA3, 0x10F1, 0x802A4861696B7521LL}, BFS_NAME},
+	{{0x81ed53da, 0x358b, 0x4a50, 0xacaa386f37cfc7d3LL}, "Haiku data (encrypted)"},
 	// Linux partitions
 	{{0x0FC63DAF, 0x8483, 0x4772, 0x8E793D69D8477DE4LL}, "Linux data"},
 	{{0xE6D6D379, 0xF507, 0x44C2, 0xA23C238F2A3DF928LL}, "Linux data (LVM)"},

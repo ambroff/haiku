@@ -93,6 +93,7 @@ AddFilesToPackage add-ons kernel partitioning_systems :
 	apple@ppc
 	sun@sparc
 	efi_gpt
+	encrypted
 	intel
 	session
 	;
@@ -129,6 +130,7 @@ AddNewDriversToPackage disk scsi :
 	scsi_disk
 	;
 AddNewDriversToPackage disk virtual :
+	encrypted_disk
 	ram_disk
 	virtio_block
 	;
@@ -317,6 +319,7 @@ AddBootModuleSymlinksToPackage
 	bfs
 	dpc
 	efi_gpt
+	encrypted_disk
 	generic_ide_pci
 	ide_isa@x86
 	isa@x86,x86_64

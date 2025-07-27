@@ -1,0 +1,21 @@
+SubDir HAIKU_TOP src add-ons kernel drivers disk virtual encrypted_disk ;
+
+SubDirCcFlags -Wno-error -Wextra ;
+
+# TODO: Need to add support for AES-NI and validate that it works:
+# Enable AES-NI and PCLMULQDQ instructions for hardware acceleration
+# ObjectCcFlags aes_ni.cpp : -maes -mpclmul ;
+
+UsePrivateKernelHeaders ;
+SubDirHdrs $(HAIKU_TOP) src system kernel ;
+SubDirSysHdrs $(HAIKU_TOP) headers ;
+
+UseHeaders [ FDirName $(SUBDIR) ] : true ;
+
+KernelAddon encrypted_disk :
+  encrypted_disk.cpp
+  aes_xts.cpp
+  rijndael.cpp
+  pbkdf2.cpp
+  sha256.cpp
+;

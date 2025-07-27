@@ -10,6 +10,8 @@
 #include <File.h>
 #include <Message.h>
 #include <Server.h>
+#include <String.h>
+#include <ObjectList.h>
 
 
 class BPartition;
@@ -61,7 +63,22 @@ private:
 	static	bool				_SuggestMountFlags(const BPartition* partition,
 									uint32* _flags);
 
+			bool				_IsEncryptedPartition(BPartition* partition);
+			bool				_IsEncryptedPartitionUnlocked(
+									BPartition* partition);
+			status_t			_UnlockEncryptedPartition(
+									BPartition* partition);
+			void				_HandleEncryptedPartition(
+									BPartition* partition);
+			void				_RememberUnlockedPartition(
+									const BString& partitionPath);
+			bool				_WasPartitionUnlocked(
+									const BString& partitionPath);
+			void				_MountVirtualDevicePartitions(
+									const BString& encryptedPath);
+
 		friend class MountVisitor;
+		friend class EncryptedUnlockVisitor;
 
 private:
 			mount_mode			fNormalMode;
@@ -70,6 +87,7 @@ private:
 
 			BFile				fPrefsFile;
 			BMessage			fSettings;
+			BObjectList<BString> fUnlockedPartitions;
 };
 
 

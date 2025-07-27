@@ -1,10 +1,11 @@
 /*
- * Copyright 2007-2018, Haiku, Inc. All rights reserved.
+ * Copyright 2007-2025, Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
  *		Stephan Aßmus, superstippi@gmx.de
  *		Axel Dörfler, axeld@pinc-software.de
+ *		Kyle Ambroff-Kao, kyle@ambroffkao.com
  */
 
 
@@ -12,7 +13,11 @@
 
 #include <new>
 
+#include <errno.h>
+#include <fcntl.h>
 #include <string.h>
+#include <sys/ioctl.h>
+#include <syslog.h>
 #include <unistd.h>
 
 #include <Alert.h>
@@ -21,24 +26,27 @@
 #include <Debug.h>
 #include <Directory.h>
 #include <DiskDevice.h>
-#include <DiskDeviceRoster.h>
 #include <DiskDeviceList.h>
+#include <DiskDeviceRoster.h>
 #include <DiskDeviceTypes.h>
 #include <DiskSystem.h>
 #include <FindDirectory.h>
-#include <fs_info.h>
-#include <fs_volume.h>
 #include <LaunchRoster.h>
 #include <Locale.h>
 #include <Message.h>
 #include <Node.h>
 #include <NodeMonitor.h>
+#include <OS.h>
 #include <Path.h>
 #include <PropertyInfo.h>
 #include <String.h>
 #include <VolumeRoster.h>
+#include <fs_info.h>
+#include <fs_volume.h>
 
+#include "EncryptedDiskPasswordWindow.hpp"
 #include "MountServer.h"
+#include "encrypted_disk.h"
 
 #include "Utilities.h"
 
@@ -51,6 +59,10 @@ static const char* kMountServerSettings = "mount_server";
 static const char* kMountFlagsKeyExtension = " mount flags";
 
 static const char* kInitialMountEvent = "initial_volumes_mounted";
+
+// GPT type for encrypted partitions
+static const char* kEncryptedPartitionGPTType = "81ed53da-358b-4a50-acaa-386f37cfc7d3";
+static const char* kEncryptedDiskControlDevice = "/dev/disk/virtual/encrypted_disk/control";
 
 
 class MountVisitor : public BDiskDeviceVisitor {
@@ -107,6 +119,23 @@ private:
 };
 
 
+class EncryptedUnlockVisitor : public BDiskDeviceVisitor {
+public:
+	EncryptedUnlockVisitor(mount_mode normalMode, mount_mode removableMode, BMessage& previous,
+		AutoMounter* autoMounter);
+	virtual ~EncryptedUnlockVisitor() {}
+
+	virtual bool Visit(BDiskDevice* device);
+	virtual bool Visit(BPartition* partition, int32 level);
+
+private:
+	mount_mode fNormalMode;
+	mount_mode fRemovableMode;
+	BMessage& fPrevious;
+	AutoMounter* fAutoMounter;
+};
+
+
 static bool
 BootedInSafeMode()
 {
@@ -153,6 +182,15 @@ MountVisitor::Visit(BDiskDevice* device)
 bool
 MountVisitor::Visit(BPartition* partition, int32 level)
 {
+#if DEBUG
+	{
+		BPath path;
+		partition->GetPath(&path);
+		PRINT(("mount_server: MountVisitor visiting partition %s (id=%d, level=%d)\n",
+			   path.Path(), (int)partition->ID(), level));
+	}
+#endif
+
 	if (fOnlyOnDeviceID >= 0) {
 		// only mount partitions on the given device id
 		// or if the partition ID is already matched
@@ -166,6 +204,23 @@ MountVisitor::Visit(BPartition* partition, int32 level)
 		}
 		if (device->ID() != fOnlyOnDeviceID)
 			return false;
+	}
+
+	// Skip encrypted partitions during mount pass - they're handled in the unlock pass
+	bool isEncrypted = false;
+	if (partition->Type() != NULL && strcmp(partition->Type(), "Haiku data (encrypted)") == 0) {
+		isEncrypted = true;
+	} else if (partition->ContentType() != NULL
+		&& strcmp(partition->ContentType(), "Encrypted Disk") == 0) {
+		isEncrypted = true;
+	}
+
+	if (isEncrypted) {
+		BPath path;
+		partition->GetPath(&path);
+		PRINT(("mount_server: Skipping encrypted partition during mount pass: %s\n",
+			path.Path()));
+		return false;
 	}
 
 	mount_mode mode = !fInitialRescan && partition->Device()->IsRemovableMedia()
@@ -224,6 +279,77 @@ MountVisitor::_WasPreviouslyMounted(const BPath& path,
 		return false;
 
 	return true;
+}
+
+
+// #pragma mark - EncryptedUnlockVisitor
+
+
+EncryptedUnlockVisitor::EncryptedUnlockVisitor(mount_mode normalMode, mount_mode removableMode,
+	BMessage& previous, AutoMounter* autoMounter)
+	:
+	fNormalMode(normalMode),
+	fRemovableMode(removableMode),
+	fPrevious(previous),
+	fAutoMounter(autoMounter)
+{
+}
+
+
+bool
+EncryptedUnlockVisitor::Visit(BDiskDevice* device)
+{
+	return Visit(device, 0);
+}
+
+
+bool
+EncryptedUnlockVisitor::Visit(BPartition *partition, int32 level)
+{
+	BPath path;
+	partition->GetPath(&path);
+	PRINT(("mount_server: EncryptedUnlockVisitor visiting partition %s (id=%d, level=%d)\n",
+		path.Path(), (int)partition->ID(), level));
+
+	// Check if this is an encrypted partition
+	bool isEncrypted = false;
+	if (partition->Type() != NULL && strcmp(partition->Type(), "Haiku data (encrypted)") == 0) {
+		isEncrypted = true;
+	} else if (partition->ContentType() != NULL
+		&& strcmp(partition->ContentType(), "Encrypted Disk") == 0) {
+		isEncrypted = true;
+	}
+
+	if (!isEncrypted) {
+		PRINT(("mount_server: Partition %s is not encrypted, skipping\n",
+			path.Path()));
+		return false;
+	}
+
+	PRINT(("mount_server: Found encrypted partition %s\n", path.Path()));
+
+	// Check unlock policy based on mode
+	mount_mode mode = partition->Device()->IsRemovableMedia() ? fRemovableMode : fNormalMode;
+
+	if (mode == kNoVolumes) {
+		PRINT(("mount_server: Skipping encrypted partition %s (mount mode is kNoVolumes)\n",
+			path.Path()));
+		return false;
+	}
+
+	// Always attempt to unlock encrypted partitions during initial scan
+	// The restore mode logic only applies to mounting, not unlocking
+	PRINT(("mount_server: Attempting to unlock encrypted partition %s\n",
+		path.Path()));
+
+	// Try to unlock the partition
+	if (fAutoMounter != NULL) {
+		fAutoMounter->_HandleEncryptedPartition(partition);
+	} else {
+		PRINT(("mount_server: Error: AutoMounter instance is null\n"));
+	}
+
+	return false;
 }
 
 
@@ -374,7 +500,8 @@ AutoMounter::AutoMounter()
 	BServer(kMountServerSignature, false, NULL),
 	fNormalMode(kRestorePreviousVolumes),
 	fRemovableMode(kAllVolumes),
-	fEjectWhenUnmounting(true)
+	fEjectWhenUnmounting(true),
+	fUnlockedPartitions(10)
 {
 	set_thread_priority(Thread(), B_LOW_PRIORITY);
 
@@ -396,6 +523,10 @@ AutoMounter::~AutoMounter()
 {
 	BLaunchRoster().UnregisterEvent(this, kInitialMountEvent);
 	BDiskDeviceRoster().StopWatching(this);
+
+	// Clean up unlocked partitions list
+	for (int32 i = 0; i < fUnlockedPartitions.CountItems(); i++)
+		delete fUnlockedPartitions.ItemAt(i);
 }
 
 
@@ -403,6 +534,8 @@ void
 AutoMounter::ReadyToRun()
 {
 	// Do initial scan
+	PRINT(("mount_server: Starting initial scan (normal=%d, removable=%d)\n", fNormalMode,
+		fRemovableMode));
 	_MountVolumes(fNormalMode, fRemovableMode, true);
 	BLaunchRoster().NotifyEvent(this, kInitialMountEvent);
 }
@@ -457,7 +590,9 @@ AutoMounter::MessageReceived(BMessage* message)
 			if (message->FindInt32("id", &deviceID) != B_OK)
 				break;
 
-			_MountVolumes(kNoVolumes, fRemovableMode, false, deviceID);
+			PRINT(("mount_server: B_DEVICE_UPDATE received for device %d, event=%d\n", 
+				(int)deviceID, event));
+			_MountVolumes(fNormalMode, fRemovableMode, false, deviceID);
 			break;
 
 #if 0
@@ -584,6 +719,24 @@ AutoMounter::_MountVolumes(mount_mode normal, mount_mode removable,
 	status_t status = devices.Fetch();
 	if (status != B_OK)
 		return;
+
+	// For initial scans, do a two-pass approach:
+	// 1. First pass: unlock encrypted partitions
+	// 2. Second pass: mount regular volumes (including newly unlocked ones)
+	if (initialRescan && deviceID < 0) {
+		PRINT(("mount_server: Starting two-pass initial scan\n"));
+
+		// Pass 1: Scan for and unlock encrypted partitions
+		PRINT(("mount_server: Pass 1 - Unlocking encrypted partitions\n"));
+		EncryptedUnlockVisitor unlockVisitor(normal, removable, fSettings, this);
+		devices.VisitEachPartition(&unlockVisitor);
+
+		// Refresh device list after unlocking (virtual devices may have been created)
+		devices.Fetch();
+
+		// Pass 2: Mount volumes (including any from unlocked virtual devices)
+		PRINT(("mount_server: Pass 2 - Mounting volumes\n"));
+	}
 
 	if (normal == kRestorePreviousVolumes) {
 		BMessage archived;
@@ -973,6 +1126,13 @@ AutoMounter::_GetSettings(BMessage *message)
 	// startup
 	ArchiveVisitor visitor(*message);
 	BDiskDeviceRoster().VisitEachMountedPartition(&visitor);
+
+	// Save unlocked encrypted partitions
+	for (int32 i = 0; i < fUnlockedPartitions.CountItems(); i++) {
+		BString* path = fUnlockedPartitions.ItemAt(i);
+		if (path != NULL)
+			message->AddString("unlockedPartition", *path);
+	}
 }
 
 
@@ -1036,6 +1196,283 @@ AutoMounter::_SuggestMountFlags(const BPartition* partition, uint32* _flags)
 }
 
 
+bool
+AutoMounter::_IsEncryptedPartition(BPartition *partition)
+{
+	BPath path;
+	partition->GetPath(&path);
+
+	// Debug logging to see what we're actually getting
+	PRINT(("mount_server: Checking partition %s - Type: %s, ContentType: %s\n",
+		path.Path(), partition->Type() ? partition->Type() : "null",
+		partition->ContentType() ? partition->ContentType() : "null"));
+
+	// Check if the partition has the encrypted GPT type
+	if (partition->Type() != NULL && strcmp(partition->Type(), kEncryptedPartitionGPTType) == 0) {
+		PRINT(("mount_server: Found encrypted partition by GPT type: %s\n", path.Path()));
+		return true;
+	}
+
+	// Check the Type field for the Haiku data (encrypted) type
+	if (partition->Type() != NULL && strcmp(partition->Type(), "Haiku data (encrypted)") == 0) {
+		PRINT(("mount_server: Found encrypted partition by type: %s\n", path.Path()));
+		return true;
+	}
+
+	// Also check content type
+	if (partition->ContentType() != NULL
+		&& strcmp(partition->ContentType(), "Encrypted Disk") == 0) {
+		PRINT(("mount_server: Found encrypted partition by content type: %s\n", path.Path()));
+		return true;
+	}
+
+	return false;
+}
+
+
+bool
+AutoMounter::_IsEncryptedPartitionUnlocked(BPartition *partition)
+{
+	BPath path;
+	if (partition->GetPath(&path) != B_OK)
+		return false;
+
+	// Open control device
+	int fd = open(kEncryptedDiskControlDevice, O_RDWR);
+	if (fd < 0)
+		return false;
+
+	// Query status
+	encrypted_disk_ioctl_partition_control control;
+	strlcpy(control.partition_path, path.Path(), sizeof(control.partition_path));
+
+	bool unlocked = false;
+	if (ioctl(fd, ENCRYPTED_DISK_IOCTL_STATUS_PARTITION, &control) == 0)
+		unlocked = control.data.status.status == ENCRYPTED_DISK_STATUS_UNLOCKED;
+
+	close(fd);
+	return unlocked;
+}
+
+
+status_t
+AutoMounter::_UnlockEncryptedPartition(BPartition *partition)
+{
+	BPath path;
+	if (partition->GetPath(&path) != B_OK) {
+		PRINT(("mount_server: Failed to get path for partition\n"));
+		return B_ERROR;
+	}
+
+	// Show password dialog
+	if (InitGUIContext() != B_OK) {
+		PRINT(("mount_server: Failed to init GUI context\n"));
+		return B_ERROR;
+	}
+
+	BString partitionName = partition->Name() ? partition->Name() : "";
+	BString errorMessage;
+
+	// Retry loop for password entry
+	while (true) {
+		PRINT(("mount_server: Showing password dialog for %s\n", path.Path()));
+
+		EncryptedDiskPasswordWindow* window = new EncryptedDiskPasswordWindow();
+		BString password;
+		status_t result
+			= window->RequestPassword(path.Path(), partitionName, password, errorMessage);
+		if (result != B_OK) {
+			PRINT(("mount_server: Password dialog failed or cancelled: %s\n",
+				strerror(result)));
+			return result;
+		}
+
+		PRINT(("mount_server: Got password, length=%d\n", (int)password.Length()));
+
+		// Open control device
+		int fd = open(kEncryptedDiskControlDevice, O_RDWR);
+		if (fd < 0) {
+			PRINT(("mount_server: Failed to open control device: %s\n", strerror(errno)));
+			return B_ERROR;
+		}
+
+		PRINT(("mount_server: Opened control device, sending unlock command\n"));
+
+		// Unlock partition
+		encrypted_disk_ioctl_partition_control control;
+		memset(&control, 0, sizeof(control));
+		strlcpy(control.partition_path, path.Path(), sizeof(control.partition_path));
+		memcpy(control.data.passphrase.passphrase, password.String(), password.Length());
+		control.data.passphrase.passphrase_length = password.Length();
+
+		PRINT(("mount_server: Calling ioctl for partition %s\n",
+			control.partition_path));
+
+		result = ioctl(fd, ENCRYPTED_DISK_IOCTL_UNLOCK_PARTITION, &control, sizeof(control));
+		int ioctl_errno = errno;
+		close(fd);
+
+		PRINT(("mount_server: ioctl result: %d, errno: %s\n", result,
+			strerror(ioctl_errno)));
+
+		// Clear password from memory
+		password.SetTo("");
+		memset(&control.data.passphrase, 0, sizeof(control.data.passphrase));
+
+		if (result == 0) {
+			PRINT(("mount_server: Successfully unlocked partition\n"));
+			_RememberUnlockedPartition(path.Path());
+
+			// Add a small delay to let the system recognize the new virtual device
+			PRINT(("mount_server: Waiting briefly for virtual device to be published...\n"));
+			snooze(200000); // 200ms
+
+			return B_OK;
+		}
+
+		// Check if the error was due to incorrect passphrase
+		if (ioctl_errno == B_PERMISSION_DENIED) {
+			PRINT(("mount_server: Incorrect passphrase, prompting user to retry\n"));
+			errorMessage = B_TRANSLATE("Incorrect passphrase. Please try again.");
+			// Continue the loop to show the dialog again
+		} else {
+			PRINT(("mount_server: Failed to unlock partition, ioctl failed with error: %s\n",
+				strerror(ioctl_errno)));
+			return B_ERROR;
+		}
+	}
+}
+
+
+void
+AutoMounter::_HandleEncryptedPartition(BPartition *partition)
+{
+	BPath path;
+	if (partition->GetPath(&path) != B_OK)
+		return;
+
+	PRINT(("mount_server: Handling encrypted partition: %s\n", path.Path()));
+
+	// Check if already unlocked
+	if (_IsEncryptedPartitionUnlocked(partition)) {
+		PRINT(("mount_server: Encrypted partition already unlocked: %s\n",
+			path.Path()));
+		return;
+	}
+
+	// Check if we should unlock this partition
+	// (based on normal/removable mode and restore settings)
+	mount_mode mode = partition->Device()->IsRemovableMedia() ? fRemovableMode : fNormalMode;
+
+	PRINT(("mount_server: Mode for encrypted partition %s: %d (normal=%d, removable=%d)\n",
+		path.Path(), mode, fNormalMode, fRemovableMode));
+
+	if (mode == kNoVolumes) {
+		PRINT(("mount_server: Mode is kNoVolumes, skipping unlock\n"));
+		return;
+	}
+
+	// For encrypted partitions, we should always attempt to unlock them
+	// even in restore mode, because the user needs to provide the passphrase
+	// The "restore" part happens after unlocking when we mount the volumes inside
+	if (mode == kRestorePreviousVolumes) {
+		PRINT(("mount_server: In restore mode for encrypted partition %s\n",
+			path.Path()));
+		// Don't skip encrypted partitions in restore mode - we need to unlock them first
+	}
+
+	PRINT(("mount_server: Attempting to unlock partition: %s\n", path.Path()));
+
+	// Try to unlock
+	if (_UnlockEncryptedPartition(partition) == B_OK) {
+		PRINT(("mount_server: Successfully unlocked partition: %s\n",
+			path.Path()));
+		// Mount any partitions on the virtual device
+		_MountVirtualDevicePartitions(path.Path());
+	} else {
+		PRINT(("mount_server: Failed to unlock partition: %s\n",
+			path.Path()));
+	}
+}
+
+
+void
+AutoMounter::_RememberUnlockedPartition(const BString& partitionPath)
+{
+	// Add to our list of unlocked partitions
+	BString* pathCopy = new BString(partitionPath);
+	fUnlockedPartitions.AddItem(pathCopy);
+}
+
+
+bool
+AutoMounter::_WasPartitionUnlocked(const BString& partitionPath)
+{
+	// Check settings for previously unlocked partitions
+	int32 index = 0;
+	BString path;
+	while (fSettings.FindString("unlockedPartition", index++, &path) == B_OK) {
+		if (path == partitionPath)
+			return true;
+	}
+	return false;
+}
+
+
+void
+AutoMounter::_MountVirtualDevicePartitions(const BString& encryptedPath)
+{
+	PRINT(("mount_server: _MountVirtualDevicePartitions called for %s\n", encryptedPath.String()));
+
+	// Poll for the appearance of virtual devices for a short time
+	const int kMaxPollAttempts = 10;  // 1 second total
+	const int kPollDelayMs = 100;
+
+	BDiskDeviceList devices;
+	for (int attempt = 0; attempt < kMaxPollAttempts; attempt++) {
+		status_t status = devices.Fetch();
+		if (status != B_OK) {
+			PRINT(("mount_server: Failed to fetch devices: %s\n", strerror(status)));
+			return;
+		}
+
+		// Look for virtual devices that might have been created
+		bool foundVirtualDevice = false;
+		BDiskDevice* device;
+		for (int32 i = 0; (device = devices.DeviceAt(i)) != NULL; i++) {
+			BPath devicePath;
+			if (device->GetPath(&devicePath) != B_OK)
+				continue;
+
+			// Check if this looks like a virtual encrypted device path
+			if (strstr(devicePath.Path(), "/dev/disk/virtual/encrypted_disk/") != NULL) {
+				PRINT(("mount_server: Found virtual device: %s\n", devicePath.Path()));
+				foundVirtualDevice = true;
+
+				// Try to mount eligible partitions on this virtual device
+				MountVisitor visitor(fNormalMode, fRemovableMode, true, fSettings, device->ID());
+				device->VisitEachDescendant(&visitor);
+			}
+		}
+
+		if (foundVirtualDevice) {
+			PRINT(("mount_server: Found virtual devices, mounting complete\n"));
+			return;
+		}
+
+		// Wait a bit before trying again
+		if (attempt < kMaxPollAttempts - 1) {
+			PRINT(("mount_server: Virtual device not found yet, waiting %dms (attempt %d/%d)\n",
+				kPollDelayMs, attempt + 1, kMaxPollAttempts));
+			snooze(kPollDelayMs * 1000);  // Convert to microseconds
+		}
+	}
+
+	PRINT(("mount_server: Timeout waiting for virtual device to appear for %s\n", 
+		encryptedPath.String()));
+}
+
+
 // #pragma mark -
 
 
@@ -1047,5 +1484,3 @@ main(int argc, char* argv[])
 	app.Run();
 	return 0;
 }
-
-
