@@ -86,6 +86,7 @@ AddNewDriversToPackage disk scsi :
 	scsi_disk
 	;
 AddNewDriversToPackage disk virtual :
+	encrypted_disk
 	ram_disk
 	virtio_block
 	;
@@ -238,6 +239,7 @@ AddFilesToPackage data Terminal Themes : $(terminalThemes) ;
 AddBootModuleSymlinksToPackage
 	acpi@x86,x86_64
 	ata
+	encrypted_disk
 	pci
 	<pci>designware@riscv64
 	<pci>ecam@riscv64,arm,arm64

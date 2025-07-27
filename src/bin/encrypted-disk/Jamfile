@@ -1,0 +1,6 @@
+SubDir HAIKU_TOP src bin encrypted-disk ;
+
+SubDirHdrs [ FDirName $(HAIKU_TOP) src add-ons kernel drivers disk virtual
+	encrypted_disk ] ;
+
+StdBinCommands encrypted-disk.cpp : be [ TargetLibsupc++ ] ;

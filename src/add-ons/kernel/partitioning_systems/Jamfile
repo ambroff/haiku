@@ -4,6 +4,7 @@ HaikuSubInclude amiga ;
 HaikuSubInclude apple ;
 HaikuSubInclude atari ;
 HaikuSubInclude common ;
+HaikuSubInclude encrypted ;
 HaikuSubInclude gpt ;
 HaikuSubInclude intel ;
 HaikuSubInclude session ;
