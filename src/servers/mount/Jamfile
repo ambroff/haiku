@@ -2,10 +2,12 @@ SubDir HAIKU_TOP src servers mount ;
 
 UsePrivateHeaders app mount shared storage ;
 SubDirHdrs $(HAIKU_TOP) src kits tracker ;
+SubDirHdrs $(HAIKU_TOP) src add-ons kernel drivers disk virtual encrypted_disk ;
 
 Application mount_server
 	:
 	AutoMounter.cpp
+	EncryptedDiskPasswordWindow.cpp
 	:
 	libbe.so tracker localestub [ TargetLibstdc++ ]
 	:
@@ -16,4 +18,5 @@ DoCatalogs mount_server :
 	x-vnd.Haiku-mount_server
 	:
 	AutoMounter.cpp
+	EncryptedDiskPasswordWindow.cpp
 ;
