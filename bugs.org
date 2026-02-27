@@ -1,0 +1,397 @@
+#+TITLE: encrypted_disk Implementation Review
+#+AUTHOR: Claude
+#+DATE: 2026-02-26
+
+* Critical Issues
+** CRIT-1: Salt generation uses predictable PRNG, not cryptographic randomness
+:PROPERTIES:
+:FILE: src/add-ons/kernel/drivers/disk/virtual/encrypted_disk/encrypted_disk.cpp
+:LINES: 408-409
+:END:
+
+The salt for PBKDF2 key derivation is generated using =system_time()=:
+
+#+begin_src c++
+for (int i = 0; i < 32; i++)
+    header.salt[i] = (uint8)((system_time() * i) ^ (system_time() >> 8)) & 0xFF;
+#+end_src
+
+=system_time()= returns microseconds since boot and is completely predictable.
+Every byte of the salt is derived deterministically from two samples of the
+same monotonic clock. An attacker who knows the approximate boot time and
+initialization time (to within seconds) can enumerate all possible salts and
+brute-force the passphrase far more quickly than the 100,000 PBKDF2 iterations
+are designed to prevent.
+
+The salt should be generated using a kernel CSPRNG (e.g., reading from
+=/dev/urandom= or calling a kernel random API).
+
+** CRIT-2: Backup header is written into the encrypted data region
+:PROPERTIES:
+:FILE: src/add-ons/kernel/drivers/disk/virtual/encrypted_disk/encrypted_disk.cpp
+:LINES: 404, 457-478
+:END:
+
+The data region layout is:
+- Primary header: bytes =[0, 4095]=
+- Data region: bytes =[4096, 4096 + data_size - 1]=, where =data_size = partition_size - 2 * 4096=
+- Reserved for backup: bytes =[partition_size - 4096, partition_size - 1]=
+
+But the backup header write attempts these offsets:
+1. =partition_size - 4096 - 512  = partition_size - 4608=
+2. =partition_size - 4096 - 1024 = partition_size - 5120=
+3. =partition_size - 4096 - 4096 = partition_size - 8192=
+4. =partition_size - 2 * 4096    = partition_size - 8192=
+
+All four offsets fall BEFORE the reserved backup area and WITHIN the data
+region (which ends at =partition_size - 4097=). The backup header will be
+written into space that the user's encrypted data will later occupy.
+Consequence: user writes will silently overwrite the backup header, and if
+the primary header is corrupted, recovery is impossible.
+
+The backup should be written at =partition_size - kHeaderSize= (the start of
+the actually-reserved area), or the =data_size= calculation needs to reserve
+additional space.
+
+** CRIT-3: memset of sensitive data will be optimized away by the compiler
+:PROPERTIES:
+:FILE: multiple files
+:END:
+
+Numerous calls to =memset(buffer, 0, size)= on sensitive data (encryption
+keys, passphrases, PBKDF2 intermediates) will be eliminated by the compiler
+as dead stores when the buffer is not read after the clear. This is a
+well-documented issue (CWE-14).
+
+Affected locations include:
+- =encrypted_disk.cpp:270= (validation_buffer)
+- =encrypted_disk.cpp:175= (destructor key clear)
+- =encrypted_disk.cpp:489,577= (encryption_key after init/unlock)
+- =pbkdf2.cpp:110-114= (asalt, d1, d2, obuf)
+- =encrypted-disk.cpp:135,146,152,172,244,251= (passphrases)
+
+All of these should use =explicit_bzero()= (available on BSD-derived systems)
+or a volatile function pointer to memset.
+
+** CRIT-4: Module name mismatch prevents partitioning system from loading the driver
+:PROPERTIES:
+:FILE: src/add-ons/kernel/partitioning_systems/encrypted/encrypted.cpp
+:LINES: 150-153
+:END:
+
+The partitioning system tries to load:
+#+begin_src c++
+get_module("drivers/disk/virtual/encrypted_disk/driver_v2", &module);
+#+end_src
+
+But the driver module is registered as:
+#+begin_src c++
+#define ENCRYPTED_DISK_DRIVER_MODULE_NAME "drivers/disk/virtual/encrypted_disk/driver_v1"
+#+end_src
+
+This =v2= vs =v1= mismatch means the driver will never be loaded by the
+partitioning system. The =get_module= call will always fail.
+
+** CRIT-5: Compilation errors in partitioning system debug code
+:PROPERTIES:
+:FILE: src/add-ons/kernel/partitioning_systems/encrypted/encrypted.cpp
+:LINES: 75, 82-86
+:END:
+
+Line 75 has a typo that would be a compile error:
+#+begin_src c++
+reinterptet_cast<uint8*>(&header.cipher_type)[0],
+//        ^ 'reinterptet' should be 'reinterpret'
+#+end_src
+
+Lines 82-86 use =reinterpret_cast<uint8>(...)= (casting to a value type, not
+a pointer), which is also invalid C++:
+#+begin_src c++
+reinterpret_cast<uint8>(kEncryptedMagic[0])
+// reinterpret_cast cannot convert between arithmetic types
+#+end_src
+
+These are inside =#ifdef TRACE_ENCRYPTED= so they only break debug builds.
+But when someone enables tracing to debug an issue, they'll hit compile errors
+instead.
+
+** CRIT-6: Duplicate and divergent header struct definitions
+:PROPERTIES:
+:FILE: src/add-ons/kernel/drivers/disk/virtual/encrypted_disk/encrypted_disk.cpp, src/add-ons/kernel/partitioning_systems/encrypted/encrypted.cpp
+:END:
+
+The =encrypted_disk_header= struct is defined independently in both files:
+
+| Field             | Driver              | Partitioning System |
+|-------------------+---------------------+---------------------|
+| validation_hash   | =uint8[32]=         | (absent)            |
+| reserved          | =uint8[408]=        | =uint8[440]=        |
+| kHeaderSize const | 4096                | 512                 |
+
+The driver's struct has =validation_hash[32]= which the partitioning system
+lacks. The reserved sizes differ correspondingly. While =sizeof= is the same
+(520 bytes) due to the =_PACKED= attribute, the interpretations are
+incompatible. If the partitioning system ever writes to =reserved= or attempts
+to access fields beyond what it defines, it will silently corrupt the
+validation hash.
+
+The header struct should be defined in a single shared header file.
+
+* Security Issues
+
+** SEC-1: No constant-time comparison for validation hash
+:PROPERTIES:
+:FILE: src/add-ons/kernel/drivers/disk/virtual/encrypted_disk/encrypted_disk.cpp
+:LINES: 304
+:END:
+
+#+begin_src c++
+if (memcmp(computed_hash, header->validation_hash, 32) == 0)
+#+end_src
+
+=memcmp= short-circuits on the first mismatching byte, creating a timing side
+channel. While exploitation is unlikely for disk encryption (requires physical
+access with precise timing), it is poor cryptographic practice. Use a
+constant-time comparison function.
+
+** SEC-2: Encryption key is duplicated in memory
+:PROPERTIES:
+:FILE: src/add-ons/kernel/drivers/disk/virtual/encrypted_disk/encrypted_disk.cpp
+:LINES: 126-127, 152-156, 860-862
+:END:
+
+The 64-byte encryption key and XTS context are stored redundantly in both
+=encrypted_partition_info= and =encrypted_disk_device=. This doubles the
+attack surface for cold boot attacks. The key should exist in exactly one
+location, and the device should reference it via pointer.
+
+** SEC-3: header.key_size field is misleading
+:PROPERTIES:
+:FILE: src/add-ons/kernel/drivers/disk/virtual/encrypted_disk/encrypted_disk.cpp
+:LINES: 401
+:END:
+
+#+begin_src c++
+header.key_size = 32; // 256-bit key
+#+end_src
+
+The actual encryption key is 64 bytes (512 bits) because AES-XTS uses two
+independent 256-bit AES keys. The header records 32 (256 bits), which is
+only half the true key material size. This could mislead future code that
+reads the header to allocate or derive an insufficiently-sized key.
+
+* Concurrency Issues
+
+** CONC-1: find_partition_info returns pointer after releasing lock
+:PROPERTIES:
+:FILE: src/add-ons/kernel/drivers/disk/virtual/encrypted_disk/encrypted_disk.cpp
+:LINES: 182-196
+:END:
+
+=find_partition_info= acquires =sPartitionListLock=, finds the partition info,
+then releases the lock before returning the pointer. Every caller then uses
+the pointer without holding the lock. Between the return and the caller's use,
+another thread (e.g., an error cleanup path in =handle_partition_unlock=, or
+=handle_partition_lock=) could remove and delete the info object, creating a
+use-after-free.
+
+** CONC-2: is_unlocked checked outside device lock in read/write paths
+:PROPERTIES:
+:FILE: src/add-ons/kernel/drivers/disk/virtual/encrypted_disk/encrypted_disk.cpp
+:LINES: 939, 1048
+:END:
+
+Both =encrypted_disk_read= and =encrypted_disk_write= check
+=device->is_unlocked= before acquiring =device->lock=. If the device is locked
+by another thread between this check and the lock acquisition, the operation
+will proceed on a locked device. The check should be inside the critical
+section.
+
+** CONC-3: Race between partition unlock and device init
+:PROPERTIES:
+:FILE: src/add-ons/kernel/drivers/disk/virtual/encrypted_disk/encrypted_disk.cpp
+:LINES: 537-541, 602-609, 816-825
+:END:
+
+In =handle_partition_unlock=, the partition info is added to the list (line
+541) before =register_node= is called (line 596). If =register_node=
+triggers =init_device= on another thread, =init_device= will find the info
+in the list and try to copy the key/context (lines 860-862). But at that point,
+the info's key/context may not yet be fully initialized, or the error path
+(lines 602-609) may delete the info while =init_device= is using it.
+
+* I/O Correctness Issues
+
+** IO-1: Read loop uses mismatched byte counters
+:PROPERTIES:
+:FILE: src/add-ons/kernel/drivers/disk/virtual/encrypted_disk/encrypted_disk.cpp
+:LINES: 983-1036
+:END:
+
+The read loop calculates =chunk_size= as:
+#+begin_src c++
+size_t chunk_size = std::min(static_cast<size_t>(bytes_to_read - total_read),
+    static_cast<size_t>(64 * 1024));
+#+end_src
+
+=bytes_to_read= is the sector-aligned total read size, but =total_read=
+tracks actual bytes copied to the user buffer (which may be smaller due to
+the =offset_in_first_sector= adjustment on the first iteration). These are
+in different coordinate spaces. After the first iteration, =total_read= will
+be smaller than the sector-aligned bytes actually consumed, causing the loop
+to over-read or producing incorrect =chunk_size= calculations.
+
+** IO-2: Write path may encrypt stale buffer data
+:PROPERTIES:
+:FILE: src/add-ons/kernel/drivers/disk/virtual/encrypted_disk/encrypted_disk.cpp
+:LINES: 1088-1098
+:END:
+
+When =need_read= is false (writing full, aligned sectors), the transfer
+buffer's content from a previous operation is not cleared. The user data is
+copied into the buffer at =offset_in_first_sector=, but the rest of the
+buffer sectors are whatever was there before. These stale bytes get encrypted
+and written to disk. While this only affects the unwritten portion of the last
+chunk (which shouldn't be read back at that size), it leaks previous operation
+data into the ciphertext.
+
+** IO-3: B_GET_DEVICE_SIZE truncates on 32-bit
+:PROPERTIES:
+:FILE: src/add-ons/kernel/drivers/disk/virtual/encrypted_disk/encrypted_disk.cpp
+:LINES: 1186-1189
+:END:
+
+#+begin_src c++
+size_t size = static_cast<size_t>(device->device_size);
+#+end_src
+
+On 32-bit systems, =size_t= is 32 bits but =device_size= is =off_t= (64
+bits). Disk sizes over 4 GiB would be silently truncated. Consider using
+=B_GET_DEVICE_SIZE_LONG= or returning an error if the size exceeds 32-bit
+range.
+
+* Design Issues
+
+** DES-1: Block size is hardcoded to 512 bytes
+:PROPERTIES:
+:FILE: src/add-ons/kernel/drivers/disk/virtual/encrypted_disk/encrypted_disk.cpp
+:LINES: 402, 956-960, 1064-1068
+:END:
+
+The sector size is hardcoded to 512 bytes everywhere despite the header having
+a =block_size= field. Modern drives with 4096-byte physical sectors will work
+but with suboptimal alignment and performance. The code should either use the
+header's =block_size= field or the underlying device's reported sector size.
+
+** DES-2: No validation of header fields on read
+:PROPERTIES:
+:FILE: src/add-ons/kernel/drivers/disk/virtual/encrypted_disk/encrypted_disk.cpp
+:LINES: 317-361, 523-530
+:END:
+
+When reading the header (in =read_encrypted_header= and during unlock), only
+the magic bytes are validated. The following fields are not checked:
+- =cipher_type= is not checked against known values
+- =block_size= is not checked for valid power-of-2 values
+- =data_size= is not checked against actual partition bounds
+- =version= is not checked (only checked in the partitioning system)
+
+A corrupted or maliciously crafted header could cause the driver to use
+invalid parameters, potentially leading to out-of-bounds reads/writes.
+
+** DES-3: IV field in header is unused
+:PROPERTIES:
+:FILE: src/add-ons/kernel/drivers/disk/virtual/encrypted_disk/encrypted_disk.cpp
+:LINES: 68, 412
+:END:
+
+The header declares a 16-byte =iv[16]= field which is zeroed during init and
+never used. XTS mode uses sector numbers as tweak values, making a stored IV
+unnecessary. This field wastes header space and could confuse readers of the
+code into thinking an IV is used. It should be removed or documented as
+reserved-for-future-use.
+
+** DES-4: Control device only allows one opener at a time
+:PROPERTIES:
+:FILE: src/add-ons/kernel/drivers/disk/virtual/encrypted_disk/encrypted_disk.cpp
+:LINES: 200-213
+:END:
+
+The control device returns =B_BUSY= if already open. Since the AutoMounter
+may hold it open during boot-time unlock, the =encrypted-disk= CLI tool would
+be unable to operate simultaneously. This makes it impossible to manually
+unlock partitions while the AutoMounter is running its unlock pass.
+
+** DES-5: partition_path buffer size mismatch
+:PROPERTIES:
+:FILE: src/add-ons/kernel/drivers/disk/virtual/encrypted_disk/encrypted_disk.cpp:118, src/add-ons/kernel/drivers/disk/virtual/encrypted_disk/encrypted_disk.h:51
+:END:
+
+=encrypted_partition_info::partition_path= is =PATH_MAX= (1024 bytes), but
+=encrypted_disk_ioctl_partition_control::partition_path= is 256 bytes. Paths
+longer than 255 characters will be silently truncated by the ioctl struct,
+causing lookup failures or misdirected operations.
+
+** DES-6: encrypted_disk_uninit_driver uses unsafe pointer discrimination
+:PROPERTIES:
+:FILE: src/add-ons/kernel/drivers/disk/virtual/encrypted_disk/encrypted_disk.cpp
+:LINES: 1449-1457, 1468-1481
+:END:
+
+The driver cookie is either a =ControlDevice*= or an integer cast to =void*=.
+=encrypted_disk_uninit_driver= uses:
+
+#+begin_src c++
+ControlDevice* device = dynamic_cast<ControlDevice*>((ControlDevice*)driverCookie);
+#+end_src
+
+=ControlDevice= has no virtual functions, so =dynamic_cast= is not meaningful
+for polymorphic type checking (it requires a polymorphic type). For virtual
+device cookies where the value is a small integer, C-casting it to
+=ControlDevice*= produces an invalid pointer, and any dereference would crash.
+
+=register_child_devices= uses =cookieValue < 1000= as a heuristic to
+distinguish the two cases, which is fragile.
+
+Both functions should use a proper discriminated union or wrapper struct.
+
+* AutoMounter Issues
+
+** AM-1: Unlocked partition password persists in BString
+:PROPERTIES:
+:FILE: src/servers/mount/AutoMounter.cpp
+:LINES: ~1286-1306
+:END:
+
+In =_UnlockEncryptedPartition=, the password is stored in a =BString=. After
+use, the code does =password.SetTo("")= which may not overwrite the original
+buffer (=BString= may allocate a new buffer for the empty string and free the
+old one without zeroing it, or it may keep the old buffer with only the first
+byte zeroed). The password could remain readable in the process heap.
+
+** AM-2: 200ms sleep is a fragile synchronization mechanism
+:PROPERTIES:
+:FILE: src/servers/mount/AutoMounter.cpp
+:LINES: ~1309-1310
+:END:
+
+After unlocking, the AutoMounter sleeps 200ms hoping the virtual device
+appears, then =_MountVirtualDevicePartitions= polls for up to 1 second
+more. This is fragile and racy. Under load, the device might take longer
+to appear. A proper notification mechanism (device_manager callback or
+node monitoring) would be more reliable.
+
+** AM-3: GPT type GUID check may be dead code
+:PROPERTIES:
+:FILE: src/servers/mount/AutoMounter.cpp
+:LINES: ~1206
+:END:
+
+=_IsEncryptedPartition= checks =partition->Type()= against the raw UUID
+string =kEncryptedPartitionGPTType=. But on Haiku, =partition->Type()= may
+return the human-readable type name (e.g., "Haiku data (encrypted)") rather
+than the raw GUID. If so, the GUID comparison never matches and the
+=kEncryptedPartitionGPTType= constant is dead code.
+
+The code also checks the name string separately, so functionality is not
+broken, but the GUID path should be verified or removed.
